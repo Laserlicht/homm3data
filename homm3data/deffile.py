@@ -7,11 +7,12 @@ import struct
 from collections import defaultdict
 import warnings
 import numpy as np
+from io import BytesIO
 
 @contextlib.contextmanager
-def open(file: str | typing.BinaryIO, write: bool = False):
+def open(file: str | typing.BinaryIO):
     if isinstance(file, str):
-        file = builtins.open(file, ("w" if write else "r") + "b")
+        file = builtins.open(file, "rb")
     obj = DefFile(file)
     try:
         yield obj
@@ -210,6 +211,45 @@ class DefFile:
         img = Image.new('RGBA', (full_width, full_height), (0, 0, 0, 0))
         img.paste(img_rgb, (margin_left, margin_top))
         return img
+    
+    def __create_header(self) -> typing.ByteString:
+        file = BytesIO()
+
+        data = self.__raw_data
+
+        file.write(struct.pack("<IIII", int(self.__type), self.__width, self.__height, self.__block_count))
+        for i in range(256):
+            file.write(struct.pack("<BBB", self.__palette[i][0], self.__palette[i][1], self.__palette[i][2]))
+
+        data.sort(key=lambda k: (k["group_id"], k["image_id"]))
+        group_id = None
+        for i, d in enumerate(data):
+            if d["group_id"] != group_id:
+                image_count = max([x["image_id"] for x in data if x["group_id"] == d["group_id"]]) + 1
+                file.write(struct.pack("<IIII", d["group_id"], image_count, 0, 0))
+
+                for j in range(image_count):
+                    name = data[i + j]["name"].encode()
+                    while len(name) < 13:
+                        name += b"\x00"
+                    file.write(struct.pack("13s", name))
+                for j in range(image_count):
+                    file.write(struct.pack("<I", data[i + j]["offset"]))
+
+                group_id = d["group_id"]
+        
+        file.seek(0)
+        return file.read()
+
+    def __recalculate_size_offset(self):
+        start = len(self.__create_header())
+        self.__raw_data.sort(key=lambda k: k["offset"])
+        for d in self.__raw_data:
+            length = len(d["image"]["pixeldata"])
+            d["image"]["format"] = 0
+            d["image"]["size"] = length
+            d["offset"] = start
+            start += length + 32
 
     class FileType(IntEnum):
         SPELL = 0x40,
@@ -223,7 +263,7 @@ class DefFile:
         SPRITE_FRAME = 0x48,
         BATTLE_HERO = 0x49
 
-    def read(self, how: str="combined", group_id: int=None, image_id: int=None, name: str=None) -> Image.Image:
+    def read_image(self, how: str="combined", group_id: int=None, image_id: int=None, name: str=None) -> Image.Image:
         found_data = [
             value for value in self.__raw_data if
             (group_id is None or value["group_id"] == group_id) and
@@ -247,7 +287,21 @@ class DefFile:
             found_data["image"]["has_shadow"],
             how
         )
-    
+
+    def save(self, file: str | typing.BinaryIO):
+        if isinstance(file, str):
+            file = builtins.open(file, "wb")
+
+        self.__recalculate_size_offset()
+        file.write(self.__create_header())
+        
+        data = self.__raw_data
+        data.sort(key=lambda k: k["offset"])
+        for d in data:
+            file.write(struct.pack("<IIIIIIii", d["image"]["size"], d["image"]["format"], d["image"]["full_width"], d["image"]["full_height"], d["image"]["width"], d["image"]["height"], d["image"]["margin_left"], d["image"]["margin_top"]))
+            file.write(d["image"]["pixeldata"])
+
+
     def get_size(self) -> tuple[int, int]:
         return (self.__width, self.__height)
     
@@ -262,3 +316,6 @@ class DefFile:
     
     def get_raw_data(self) -> dict:
         return self.__raw_data
+    
+    def set_raw_data(self, data: list[dict[str, typing.Any]]):
+        self.__raw_data = data
