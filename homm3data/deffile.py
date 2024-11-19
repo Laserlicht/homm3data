@@ -143,7 +143,7 @@ class DefFile:
             "pixeldata": pixeldata
         }
     
-    def __get_image(self, data: typing.ByteString, width: int, height: int, full_width: int, full_height: int, margin_left: int, margin_top: int, how: str, has_shadow: bool):
+    def __get_image(self, data: typing.ByteString, width: int, height: int, full_width: int, full_height: int, margin_left: int, margin_top: int, has_shadow: bool, how: str):
         img_p = Image.frombytes('P', (width, height), data)
         palette = [item for sub_list in self.__palette for item in sub_list] # flatten
         img_p.putpalette(palette)
@@ -223,9 +223,30 @@ class DefFile:
         SPRITE_FRAME = 0x48,
         BATTLE_HERO = 0x49
 
-    def read(self, group_id: int=None, image_id: int=None, name: str=None) -> Image.Image:
-        # TODO: name/group/image handling
-        return Image.new(mode="RGB", size=(200, 200))
+    def read(self, how: str="combined", group_id: int=None, image_id: int=None, name: str=None) -> Image.Image:
+        found_data = [
+            value for value in self.__raw_data if
+            (group_id is None or value["group_id"] == group_id) and
+            (image_id is None or value["image_id"] == image_id) and
+            (name is None or value["name"] == name)
+        ]
+
+        if len(found_data) != 1:
+            warnings.warn("Image read unsuccessful. Found %d images with filter criteria." % len(found_data))
+            return None
+        found_data = found_data[0]
+        
+        return self.__get_image(
+            found_data["image"]["pixeldata"],
+            found_data["image"]["width"],
+            found_data["image"]["height"],
+            found_data["image"]["full_width"],
+            found_data["image"]["full_height"],
+            found_data["image"]["margin_left"],
+            found_data["image"]["margin_top"],
+            found_data["image"]["has_shadow"],
+            how
+        )
     
     def get_size(self) -> tuple[int, int]:
         return (self.__width, self.__height)
