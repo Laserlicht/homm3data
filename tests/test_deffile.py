@@ -12,4 +12,5 @@ def test_file_handling():
 
 def test_type():
     with deffile.open("tests/files/courtyard/CTrSalamand.def") as d:
+        a = d.get_raw_data()
         assert d.get_type() == deffile.DefFile.FileType.CREATURE

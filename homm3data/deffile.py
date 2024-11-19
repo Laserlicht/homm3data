@@ -6,6 +6,7 @@ from enum import IntEnum
 import struct
 from collections import defaultdict
 import warnings
+import numpy as np
 
 @contextlib.contextmanager
 def open(file: str | typing.BinaryIO, write: bool = False):
@@ -138,8 +139,77 @@ class DefFile:
             "height": height,
             "margin_left": margin_left,
             "margin_top": margin_top,
+            "has_shadow": self.__type not in [self.FileType.SPELL, self.FileType.TERRAIN, self.FileType.CURSOR, self.FileType.INTERFACE],
             "pixeldata": pixeldata
         }
+    
+    def __get_image(self, data: typing.ByteString, width: int, height: int, full_width: int, full_height: int, margin_left: int, margin_top: int, how: str, has_shadow: bool):
+        img_p = Image.frombytes('P', (width, height), data)
+        palette = [item for sub_list in self.__palette for item in sub_list] # flatten
+        img_p.putpalette(palette)
+        img_rgb = img_p.convert("RGBA")
+        pix_rgb = np.array(img_rgb)
+        pix_p = np.array(img_p)
+
+        # replace special colors
+        # 0 -> (0,0,0,0)    = full transparency
+        # 1 -> (0,0,0,0x40) = shadow border
+        # 2 -> Normal Pixeldata
+        # 3 -> Normal Pixeldata
+        # 4 -> (0,0,0,0x80) = shadow body
+        # 5 -> (0,0,0,0)    = selection highlight, treat as full transparency
+        # 6 -> (0,0,0,0x80) = shadow body below selection, treat as shadow body
+        # 7 -> (0,0,0,0x40) = shadow border below selection, treat as shadow border
+        # >7 -> Normal Pixeldata
+        
+        match how:
+            case "combined":
+                pix_rgb[pix_p == 0] = (0, 0, 0, 0)
+                if has_shadow:
+                    pix_rgb[pix_p == 1] = (0, 0, 0, 0x40)
+                    pix_rgb[pix_p == 4] = (0, 0, 0, 0x80)
+                    pix_rgb[pix_p == 5] = (0, 0, 0, 0)
+                    pix_rgb[pix_p == 6] = (0, 0, 0, 0x80)
+                    pix_rgb[pix_p == 7] = (0, 0, 0, 0x40)
+            case "normal":
+                pix_rgb[pix_p == 0] = (0, 0, 0, 0)
+                if has_shadow:
+                    pix_rgb[pix_p == 1] = (0, 0, 0, 0)
+                    pix_rgb[pix_p == 4] = (0, 0, 0, 0)
+                    pix_rgb[pix_p == 5] = (0, 0, 0, 0)
+                    pix_rgb[pix_p == 6] = (0, 0, 0, 0)
+                    pix_rgb[pix_p == 7] = (0, 0, 0, 0)
+            case "shadow":
+                pix_rgb[pix_p == 0] = (0, 0, 0, 0)
+                pix_rgb[pix_p == 1] = (0, 0, 0, 0x40)
+                pix_rgb[pix_p == 2] = (0, 0, 0, 0)
+                pix_rgb[pix_p == 3] = (0, 0, 0, 0)
+                pix_rgb[pix_p == 4] = (0, 0, 0, 0x80)
+                pix_rgb[pix_p == 5] = (0, 0, 0, 0)
+                pix_rgb[pix_p == 6] = (0, 0, 0, 0x80)
+                pix_rgb[pix_p == 7] = (0, 0, 0, 0x40)
+                pix_rgb[pix_p > 7] = (0, 0, 0, 0)
+                if not has_shadow:
+                    return None
+            case "overlay":
+                if not has_shadow or (pix_p == 5).sum() == 0:
+                    return None
+                pix_rgb[pix_p == 0] = (0, 0, 0, 0)
+                pix_rgb[pix_p == 1] = (0, 0, 0, 0)
+                pix_rgb[pix_p == 2] = (0, 0, 0, 0)
+                pix_rgb[pix_p == 3] = (0, 0, 0, 0)
+                pix_rgb[pix_p == 4] = (0, 0, 0, 0)
+                pix_rgb[pix_p == 5] = (255, 255, 255, 255)
+                pix_rgb[pix_p == 6] = (255, 255, 255, 255)
+                pix_rgb[pix_p == 7] = (255, 255, 255, 255)
+                pix_rgb[pix_p > 7] = (0, 0, 0, 0)
+            case _:
+                warnings.warn("Unknown how %s" % how)
+                return None
+        img_rgb = Image.fromarray(pix_rgb)
+        img = Image.new('RGBA', (full_width, full_height), (0, 0, 0, 0))
+        img.paste(img_rgb, (margin_left, margin_top))
+        return img
 
     class FileType(IntEnum):
         SPELL = 0x40,
