@@ -241,15 +241,17 @@ class DefFile:
         file.seek(0)
         return file.read()
 
-    def __recalculate_size_offset(self):
+    def __recalculate_size_offset(self) -> list[dict[str, typing.Any]]:
         start = len(self.__create_header())
-        self.__raw_data.sort(key=lambda k: k["offset"])
-        for d in self.__raw_data:
+        data = self.__raw_data
+        data.sort(key=lambda k: k["offset"])
+        for d in data:
             length = len(d["image"]["pixeldata"])
             d["image"]["format"] = 0
             d["image"]["size"] = length
             d["offset"] = start
             start += length + 32
+        return data
 
     class FileType(IntEnum):
         SPELL = 0x40,
@@ -292,10 +294,9 @@ class DefFile:
         if isinstance(file, str):
             file = builtins.open(file, "wb")
 
-        self.__recalculate_size_offset()
+        data = self.__recalculate_size_offset()
         file.write(self.__create_header())
         
-        data = self.__raw_data
         data.sort(key=lambda k: k["offset"])
         for d in data:
             file.write(struct.pack("<IIIIIIii", d["image"]["size"], d["image"]["format"], d["image"]["full_width"], d["image"]["full_height"], d["image"]["width"], d["image"]["height"], d["image"]["margin_left"], d["image"]["margin_top"]))
