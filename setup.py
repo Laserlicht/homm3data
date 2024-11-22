@@ -9,7 +9,7 @@ setup(
     license = "MIT",
     keywords = "homm3 heroes iii might magic def lod pak",
     url = "https://github.com/Laserlicht/homm3data",
-    install_requires=['pillow==10.3.0', 'numpy==1.26.4'],
+    install_requires=['pillow>=10.3.0', 'numpy>=1.26.4'],
     setup_requires=['pytest-runner'],
     tests_require=['pytest==8.3.3'],
     test_suite='tests',
