@@ -8,6 +8,12 @@ import gzip
 
 @contextlib.contextmanager
 def open(file: str | typing.BinaryIO):
+    """
+    Open a Heroes III LOD file. Avoid using LodFile class directly
+
+    Args:
+        file (str | BinaryIO): The file as filepath or file like object
+    """
     if isinstance(file, str):
         file = builtins.open(file, "rb")
     obj = LodFile(file)
@@ -17,6 +23,9 @@ def open(file: str | typing.BinaryIO):
         file.close()
 
 class LodFile:
+    """
+    Class for LOD handling. Use open() and avoid using directly.
+    """
     def __init__(self, file: typing.BinaryIO):
         self.__file = file
         self.__parse()
@@ -43,9 +52,24 @@ class LodFile:
             self.__files.append((filename, offset, size, csize))
 
     def get_filelist(self) -> list[str]:
+        """
+        Get list of all files inside LOD archive
+
+        Returns:
+            list[str]: All filenames inside LOD archive.
+        """
         return [x[0] for x in self.__files]
     
     def get_file(self, selected_filename) -> bytes:
+        """
+        Get file from LOD archive
+
+        Args:
+            file (str): The filename of the requested file
+
+        Returns:
+            bytes: File content as bytes.
+        """
         selected_filename = selected_filename.lower()
 
         for filename, offset, size, csize in self.__files:

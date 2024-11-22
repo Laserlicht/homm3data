@@ -4,7 +4,7 @@ import typing
 import io
 
 def is_pcx(file: str | bytes | typing.BinaryIO) -> bool:
-    '''
+    """
     Checks if file is Heroes III PCX file.
 
     Args:
@@ -12,7 +12,7 @@ def is_pcx(file: str | bytes | typing.BinaryIO) -> bool:
 
     Returns:
         bool: True if file is pcx, False otherwise.
-    '''
+    """
     if isinstance(file, io.IOBase):
         data = file.read()
     elif isinstance(file, str):
@@ -25,7 +25,7 @@ def is_pcx(file: str | bytes | typing.BinaryIO) -> bool:
     return size == width * height or size == width * height * 3
 
 def read_pcx(file: str | bytes | typing.BinaryIO) -> Image.Image:
-    '''
+    """
     Reads in a Heroes III PCX file as PIL image.
 
     Args:
@@ -33,7 +33,7 @@ def read_pcx(file: str | bytes | typing.BinaryIO) -> Image.Image:
 
     Returns:
         bool: Image as PIL image, None if failed.
-    '''
+    """
     if isinstance(file, io.IOBase):
         data = file.read()
     elif isinstance(file, str):
