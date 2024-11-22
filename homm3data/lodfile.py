@@ -65,7 +65,7 @@ class LodFile:
         Get file from LOD archive
 
         Args:
-            file (str): The filename of the requested file
+            selected_filename (str): The filename of the requested file
 
         Returns:
             bytes: File content as bytes.

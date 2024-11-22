@@ -8,6 +8,12 @@ from PIL import Image
 
 @contextlib.contextmanager
 def open(file: str | typing.BinaryIO):
+    """
+    Open a Heroes III HD PAK file. Avoid using PakFile class directly
+
+    Args:
+        file (str | BinaryIO): The file as filepath or file like object
+    """
     if isinstance(file, str):
         file = builtins.open(file, "rb")
     obj = PakFile(file)
@@ -17,6 +23,9 @@ def open(file: str | typing.BinaryIO):
         file.close()
 
 class PakFile:
+    """
+    Class for PAK handling. Use open() and avoid using directly.
+    """
     def __init__(self, file: typing.BinaryIO):
         self.__file = file
         self.__parse()
@@ -80,6 +89,15 @@ class PakFile:
             self.__data[name] = (image_config, data)
     
     def get_sheets(self, name: str) -> list[Image.Image]:
+        """
+        Get all sheets for a specified sheet name as images
+
+        Args:
+            name (str): The requested sheet name
+
+        Returns:
+            list[Image.Image]: A list of PIL images with all sheets.
+        """
         for k, v in self.__data.items():
             if k.upper() == name.upper():
                 return [Image.open(io.BytesIO(x)) for x in v[1]]
@@ -88,6 +106,15 @@ class PakFile:
         return None
       
     def get_sheets_dds(self, name: str) -> list[bytes]:
+        """
+        Get all sheets for a specified sheet name as dds images
+
+        Args:
+            name (str): The requested sheet name
+
+        Returns:
+            list[bytes]: A list of bytes with all sheets as dds.
+        """
         for k, v in self.__data.items():
             if k.upper() == name.upper():
                 return [x for x in v[1]]
