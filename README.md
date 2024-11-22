@@ -1,6 +1,9 @@
 # homm3data
 Decoding and encoding of Heroes Might of Magic III files
 
+# API
+The API for the library is described [here](https://laserlicht.github.io/homm3data).
+
 ## License
 Library is released under MIT license.
 
