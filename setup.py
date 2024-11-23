@@ -4,7 +4,7 @@ setup(
     name='homm3data',
     packages=find_packages(include=['homm3data']),
     version='0.1.2',
-    description='Decoding and encoding of Heroes Might of Magic III files',
+    description='Decoding of Heroes Might of Magic III files',
     author='Laserlicht',
     license = "MIT",
     keywords = "homm3 heroes iii might magic def lod pak",
