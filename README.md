@@ -38,6 +38,22 @@ with pakfile.open("path/to/sprite_DXT_com_x3.pak") as pak:
     img.save('path/to/image.png')
 ```
 
+Extracting text from H3 demo:
+```
+import urllib.request
+import tarfile
+from io import BytesIO
+from homm3data import lodfile
+
+url = "http://updates.lokigames.com/loki_demos/heroes3-demo.run"
+contents = urllib.request.urlopen(url).read()
+data = contents.split(b"END_OF_STUB\n", 1)[1]
+with tarfile.open(fileobj=BytesIO(data), mode="r:gz") as tar:
+    with lodfile.open(tar.extractfile("data/demos/heroes3_demo/data/h3bitmap.lod")) as lod:
+        data = lod.get_file("GENRLTXT.TXT")
+        print(data.decode())
+```
+
 ## API
 The API for the library is described [here](https://laserlicht.github.io/homm3data).
 
