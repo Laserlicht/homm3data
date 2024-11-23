@@ -171,6 +171,8 @@ class DefFile:
         # 6 -> (0,0,0,0x80) = shadow body below selection, treat as shadow body
         # 7 -> (0,0,0,0x40) = shadow border below selection, treat as shadow border
         # >7 -> Normal Pixeldata
+
+        has_overlay = has_shadow and self.__palette[5] == (255, 255, 0) and (pix_p == 5).sum() > 0
         
         match how:
             case "combined":
@@ -178,7 +180,8 @@ class DefFile:
                 if has_shadow:
                     pix_rgb[pix_p == 1] = (0, 0, 0, 0x40)
                     pix_rgb[pix_p == 4] = (0, 0, 0, 0x80)
-                    pix_rgb[pix_p == 5] = (0, 0, 0, 0)
+                    if has_overlay:
+                        pix_rgb[pix_p == 5] = (0, 0, 0, 0)
                     pix_rgb[pix_p == 6] = (0, 0, 0, 0x80)
                     pix_rgb[pix_p == 7] = (0, 0, 0, 0x40)
             case "normal":
@@ -186,10 +189,13 @@ class DefFile:
                 if has_shadow:
                     pix_rgb[pix_p == 1] = (0, 0, 0, 0)
                     pix_rgb[pix_p == 4] = (0, 0, 0, 0)
-                    pix_rgb[pix_p == 5] = (0, 0, 0, 0)
+                    if has_overlay:
+                        pix_rgb[pix_p == 5] = (0, 0, 0, 0)
                     pix_rgb[pix_p == 6] = (0, 0, 0, 0)
                     pix_rgb[pix_p == 7] = (0, 0, 0, 0)
             case "shadow":
+                if not has_shadow:
+                    return None
                 pix_rgb[pix_p == 0] = (0, 0, 0, 0)
                 pix_rgb[pix_p == 1] = (0, 0, 0, 0x40)
                 pix_rgb[pix_p == 2] = (0, 0, 0, 0)
@@ -199,10 +205,8 @@ class DefFile:
                 pix_rgb[pix_p == 6] = (0, 0, 0, 0x80)
                 pix_rgb[pix_p == 7] = (0, 0, 0, 0x40)
                 pix_rgb[pix_p > 7] = (0, 0, 0, 0)
-                if not has_shadow:
-                    return None
             case "overlay":
-                if not has_shadow or (pix_p == 5).sum() == 0:
+                if not has_overlay:
                     return None
                 pix_rgb[pix_p == 0] = (0, 0, 0, 0)
                 pix_rgb[pix_p == 1] = (0, 0, 0, 0)
