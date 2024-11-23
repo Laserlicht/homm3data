@@ -345,22 +345,34 @@ class DefFile:
     
     def get_block_count(self) -> int:
         """
-        Get amount of blocks (group ids)
+        Get amount of blocks
 
         Returns:
             int: block count
         """
         return self.__block_count
     
-    def get_frame_count(self, block_id: int) -> int:
+    def get_groups(self) -> list[int]:
         """
-        Get amount of frames in block (group id)
+        Get list of aviable groups
+
+        Returns:
+            list[int]: list of groups
+        """
+        return list(dict.fromkeys([value["group_id"] for value in self.__raw_data]))
+    
+    def get_frame_count(self, group_id: int) -> int:
+        """
+        Get amount of frames in group (group id)
+
+        Args:
+            group_id (str): The group id for the frame count
 
         Returns:
             int: frame count
         """
         found_data = [
-            value for value in self.__raw_data if value["group_id"] == block_id
+            value for value in self.__raw_data if value["group_id"] == group_id
         ]
         return len(found_data)
     

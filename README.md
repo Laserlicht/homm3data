@@ -12,7 +12,7 @@ Saving all frames from def file as png files:
 from homm3data import deffile
 
 with deffile.open('path/to/deffile.def') as d:
-    for group in range(d.get_block_count()):
+    for group in d.get_groups():
         for frame in range(d.get_frame_count(group)):
             img = d.read_image('combined', group, frame)
             img.save('path/to/image_group%d_frame%d.png' % (group, frame))
