@@ -348,6 +348,18 @@ class DefFile:
         """
         return self.__block_count
     
+    def get_frame_count(self, block_id: int) -> int:
+        """
+        Get amount of frames in block (group id)
+
+        Returns:
+            int: frame count
+        """
+        found_data = [
+            value for value in self.__raw_data if value["group_id"] == block_id
+        ]
+        return len(found_data)
+    
     def get_type(self) -> FileType:
         """
         Get Type of def

@@ -17,6 +17,7 @@ def test_type():
 def test_read_image():
     with lodfile.open("tests/files/h3sprite.lod") as lod:
         with deffile.open(BytesIO(lod.get_file("avwangl.def"))) as d:
+            assert d.get_frame_count(0) == 30
             assert d.read_image(group_id=0, image_id=0).width > 0
 
 def test_save():
