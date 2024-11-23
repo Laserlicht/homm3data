@@ -18,6 +18,12 @@
             "args": ["bdist_wheel"],
             "console": "integratedTerminal",
             "justMyCode": true
+        },
+        {
+            "name": "Python: Publish package",
+            "type": "node-terminal",
+            "request": "launch",
+            "command": "python3 -m twine upload --repository homm3data dist/*"
         }
     ]
 }
