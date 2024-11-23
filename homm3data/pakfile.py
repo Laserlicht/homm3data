@@ -123,6 +123,15 @@ class PakFile:
         return None
     
     def get_sheet_config(self, name: str) -> dict:
+        """
+        Get config param of every sprite on a specified sheet name as object
+
+        Args:
+            name (str): The requested sheet name
+
+        Returns:
+            dict: A dict (with sprite name as key) with every parameter of the sprite
+        """
         for k, v in self.__data.items():
             if k.upper() == name.upper():
                 ret = {}
@@ -155,6 +164,15 @@ class PakFile:
         return None
     
     def get_sheet_config_raw(self, name: str) -> str:
+        """
+        Get config param of every sprite on a specified sheet name as object as raw string
+
+        Args:
+            name (str): The requested sheet name
+
+        Returns:
+            str: The raw embedded string for sheet config
+        """
         for k in self.__data.keys():
             if k.upper() == name.upper():
                 return k[0]
@@ -163,9 +181,24 @@ class PakFile:
         return None
     
     def get_sheetnames(self) -> list[str]:
+        """
+        Get all sheet names
+
+        Returns:
+            list: A list with all sheet names embedded in pak
+        """
         return list(self.__data.keys())
     
     def get_filenames_for_sheet(self, name: str) -> list[str]:
+        """
+        Get all sprite names from sheet
+
+        Args:
+            name (str): The requested sheet name
+
+        Returns:
+            list: A list with all sprite names for selected sheet
+        """
         for k, v in self.__data.items():
             if k.upper() == name.upper():
                 ret = []
@@ -179,6 +212,16 @@ class PakFile:
         return None
     
     def get_image(self, sheetname: str, imagename: str) -> tuple[Image.Image]:
+        """
+        Get image as PIL image
+
+        Args:
+            sheetname (str): The requested sheet name
+            imagename (str): The requested image name
+
+        Returns:
+            tuple[Image.Image]: A tuple of images. First element is normal rgb image, second element is shadow image (if existing, otherwise None)
+        """
         cfg = self.get_sheet_config(sheetname)
         data = self.get_sheets(sheetname)
 

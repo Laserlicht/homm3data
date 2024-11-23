@@ -11,6 +11,12 @@ from io import BytesIO
 
 @contextlib.contextmanager
 def open(file: str | typing.BinaryIO):
+    """
+    Open a Heroes III DEF file. Avoid using DefFile class directly
+
+    Args:
+        file (str | BinaryIO): The file as filepath or file like object
+    """
     if isinstance(file, str):
         file = builtins.open(file, "rb")
     obj = DefFile(file)
@@ -20,6 +26,9 @@ def open(file: str | typing.BinaryIO):
         file.close()
 
 class DefFile:
+    """
+    Class for DEF handling. Use open() and avoid using directly.
+    """
     def __init__(self, file: typing.BinaryIO):
         self.__file = file
         self.__parse()
@@ -265,7 +274,19 @@ class DefFile:
         SPRITE_FRAME = 0x48,
         BATTLE_HERO = 0x49
 
-    def read_image(self, how: str="combined", group_id: int=None, image_id: int=None, name: str=None) -> Image.Image:
+    def read_image(self, how: typing.Literal['combined', 'normal', 'shadow', 'overlay']="combined", group_id: int=None, image_id: int=None, name: str=None) -> Image.Image:
+        """
+        Read image as PIL image. Combination of parameters `group_id`, `image_id`, `name` has to be unique. If not required to make unique some of them can skipped.
+
+        Args:
+            how (str): Selection of desired layers: `combined` for all, `normal` only for unlayered, `shadow` for shadow and `overlay` for outlines. If desired layer not exists it returns None.
+            group_id (str): The group id of the requested file
+            image_id (str): The image id of the requested file
+            name (str): The filename of the requested file
+
+        Returns:
+            Image: File as PIL image. None if file or layer not found.
+        """
         found_data = [
             value for value in self.__raw_data if
             (group_id is None or value["group_id"] == group_id) and
@@ -291,6 +312,12 @@ class DefFile:
         )
 
     def save(self, file: str | typing.BinaryIO):
+        """
+        Write data from file (currently only for testing)
+
+        Args:
+            file (str | BinaryIO): The file as filepath or file like object
+        """
         if isinstance(file, str):
             file = builtins.open(file, "wb")
 
@@ -304,19 +331,46 @@ class DefFile:
 
 
     def get_size(self) -> tuple[int, int]:
+        """
+        Get image size (max img of def)
+
+        Returns:
+            tuple: Width and height as tuple.
+        """
         return (self.__width, self.__height)
     
     def get_block_count(self) -> int:
+        """
+        Get amount of blocks (group ids)
+
+        Returns:
+            int: block count
+        """
         return self.__block_count
     
     def get_type(self) -> FileType:
+        """
+        Get Type of def
+
+        Returns:
+            FileType: Type of def
+        """
         return self.__type
     
     def get_palette(self) -> list[tuple[int, int, int]]:
+        """
+        Get palette
+
+        Returns:
+            list[tuple[int, int, int]]: List of tuple with 3 elements (rgb)
+        """
         return self.__palette
     
     def get_raw_data(self) -> dict:
+        """
+        Get internal structure of loaded def
+
+        Returns:
+            dict: Object with internal structure
+        """
         return self.__raw_data
-    
-    def set_raw_data(self, data: list[dict[str, typing.Any]]):
-        self.__raw_data = data
