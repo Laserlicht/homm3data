@@ -49,7 +49,7 @@ class DefFile:
     
             for j in range(image_count):
                 name, = struct.unpack("13s", self.__file.read(13))
-                self.__file_names[group_id].append(name.split(b'\x00', 1)[0].decode())
+                self.__file_names[group_id].append(name.split(b'\x00', 1)[0].decode('cp1252', errors="ignore"))
             for j in range(image_count):
                 offset, = struct.unpack("<I", self.__file.read(4))
                 self.__offsets[group_id].append(offset)
