@@ -3,7 +3,7 @@ from setuptools import find_packages, setup
 setup(
     name='homm3data',
     packages=find_packages(include=['homm3data']),
-    version='0.1.5',
+    version='0.1.6',
     description='Decoding of Heroes Might of Magic III files',
     author='Laserlicht',
     license = "MIT",

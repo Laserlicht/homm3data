@@ -315,6 +315,29 @@ class DefFile:
             how
         )
 
+    def get_image_name(self, group_id: int, image_id: int) -> str:
+        """
+        Get image name.
+
+        Args:
+            group_id (str): The group id of the requested file
+            image_id (str): The image id of the requested file
+
+        Returns:
+            str: image name
+        """
+        found_data = [
+            value for value in self.__raw_data if
+            (group_id is None or value["group_id"] == group_id) and
+            (image_id is None or value["image_id"] == image_id)
+        ]
+
+        if len(found_data) != 1:
+            warnings.warn("Image read unsuccessful. Found %d images with filter criteria." % len(found_data))
+            return None
+        else:
+            return found_data[0]["name"]
+
     def save(self, file: str | typing.BinaryIO):
         """
         Write data from file (currently only for testing)
