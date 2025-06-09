@@ -10,3 +10,7 @@ def test_pcx():
 
         assert pcxfile.read_pcx(data).width == 144
         assert pcxfile.read_pcx(BytesIO(data)).width == 144
+
+def test_p32():
+    with open("tests/files/HotA/Data/hd_wrench.p32", "rb") as p32:
+        assert pcxfile.read_pcx(p32.read()).width == 16

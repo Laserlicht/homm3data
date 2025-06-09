@@ -21,6 +21,10 @@ def is_pcx(file: str | bytes | typing.BinaryIO) -> bool:
     else:
         data = file
 
+    (magic,) = struct.unpack("<I", data[:4])
+    if magic == 0x46323350: #p32 format from HotA
+        return True
+
     size, width, height = struct.unpack("<III", data[:12])
     return size == width * height or size == width * height * 3
 
@@ -41,6 +45,21 @@ def read_pcx(file: str | bytes | typing.BinaryIO) -> Image.Image:
             data = f.read()
     else:
         data = file
+
+    (magic,) = struct.unpack("<I", data[:4])
+    if magic == 0x46323350: #p32 format from HotA
+        (magic, unknown1, bits_per_pixel, size_raw, size_header, size_data, width, height, unknown8, unknown9) = struct.unpack('<10I', data[:40])
+        assert magic == 0x46323350
+        assert size_header == 40
+        assert size_raw == size_header + size_data
+        assert size_data == width * height * bits_per_pixel / 8
+        assert bits_per_pixel == 32
+        assert unknown1 == 0
+        assert unknown8 == 8
+        assert unknown9 == 0
+        im = Image.frombytes('RGBA', (width, height), data[40:])
+        im = im.transpose(Image.FLIP_TOP_BOTTOM)
+        return im
 
     size, width, height = struct.unpack("<III", data[:12])
     if size == width * height:

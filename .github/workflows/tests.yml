@@ -11,6 +11,8 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
+      - name: Install innoextract
+        run: sudo apt install -y innoextract
       - uses: szenius/set-timezone@v1.2
         with:
           timezoneLinux: "Europe/Berlin"

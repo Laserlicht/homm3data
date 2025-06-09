@@ -54,6 +54,9 @@ with tarfile.open(fileobj=BytesIO(data), mode="r:gz") as tar:
         print(data.decode())
 ```
 
+## Tests
+The tests needs `innoextract` installed on system (may needs to be inside PATH variable).
+
 ## API
 The API for the library is described [here](https://laserlicht.github.io/homm3data).
 
