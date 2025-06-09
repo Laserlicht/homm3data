@@ -9,7 +9,7 @@ Library can be installed with PIP:
 ## Examples
 
 Saving all frames from def file as png files:
-```
+```python
 from homm3data import deffile
 
 with deffile.open('path/to/deffile.def') as d:
@@ -20,7 +20,7 @@ with deffile.open('path/to/deffile.def') as d:
 ```
 
 Extracting image from pcx inside lod file:
-```
+```python
 from homm3data import pcxfile, lodfile
 
 with lodfile.open('path/to/h3bitmap.lod') as lod:
@@ -30,7 +30,7 @@ with lodfile.open('path/to/h3bitmap.lod') as lod:
 ```
 
 Extracting image from pak file (Heroes III HD):
-```
+```python
 from homm3data import pakfile
 
 with pakfile.open("path/to/sprite_DXT_com_x3.pak") as pak:
@@ -39,7 +39,7 @@ with pakfile.open("path/to/sprite_DXT_com_x3.pak") as pak:
 ```
 
 Extracting text from H3 demo:
-```
+```python
 import urllib.request
 import tarfile
 from io import BytesIO

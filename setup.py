@@ -1,10 +1,15 @@
 from setuptools import find_packages, setup
 
+with open("README.md", "r", encoding="utf-8") as f:
+    long_description = f.read()
+
 setup(
     name='homm3data',
     packages=find_packages(include=['homm3data']),
-    version='0.1.7',
+    version='0.1.9',
     description='Decoding of Heroes Might of Magic III files',
+    long_description=long_description,
+    long_description_content_type='text/markdown',
     author='Laserlicht',
     license = "MIT",
     keywords = "homm3 heroes iii might magic def lod pak",
