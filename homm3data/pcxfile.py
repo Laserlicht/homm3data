@@ -2,6 +2,7 @@ import struct
 from PIL import Image
 import typing
 import io
+import numpy as np
 
 def is_pcx(file: str | bytes | typing.BinaryIO) -> bool:
     """
@@ -57,7 +58,9 @@ def read_pcx(file: str | bytes | typing.BinaryIO) -> Image.Image:
         assert unknown1 == 0
         assert unknown8 == 8
         assert unknown9 == 0
-        im = Image.frombytes('RGBA', (width, height), data[40:])
+        arr = np.frombuffer(data[40:], dtype=np.uint8).reshape((height, width, 4))
+        arr = arr[:, :, [2, 1, 0, 3]] # Swap channels: BGRA -> RGBA
+        im = Image.fromarray(arr, 'RGBA')
         im = im.transpose(Image.FLIP_TOP_BOTTOM)
         return im
 
