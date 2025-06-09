@@ -26,3 +26,9 @@ def test_save():
         d.save(mf)
         mf.seek(0)
         assert len(mf.read()) > len(open("tests/files/courtyard/CTrSalamand.def", "rb").read()) # saving is currently uncompressed
+
+def test_read_image_d32():
+    with lodfile.open("tests/files/HotA/Data/HotA.lod") as lod:
+        with deffile.open(BytesIO(lod.get_file("i_ok67.d32"))) as d:
+            assert d.get_frame_count(0) == 1
+            assert d.read_image(group_id=0, image_id=0).width == 67

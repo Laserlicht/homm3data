@@ -15,7 +15,7 @@ if not os.path.isfile(os.path.join(os.path.dirname(__file__), "files/h3bitmap.lo
         open(os.path.join(os.path.dirname(__file__), "files/heroes3.snd"), "wb").write(f.extractfile("data/demos/heroes3_demo/data/heroes3.snd").read())
 
 if not os.path.isfile(os.path.join(os.path.dirname(__file__), "files/HotA/Data/HotA.lod")):
-    url = "https://web.archive.org/web/20250609102045/https://www.vault.acidcave.net/download/HotA_1.7.3_setup.exe"
+    url = "https://web.archive.org/web/20250609102045if_/https://www.vault.acidcave.net/download/HotA_1.7.3_setup.exe"
     os.makedirs(os.path.join(os.path.dirname(__file__), "files/HotA"), exist_ok=True)
     os.makedirs(os.path.join(os.path.dirname(__file__), "files/HotA/tmp"), exist_ok=True)
     urllib.request.urlretrieve(url, os.path.join(os.path.dirname(__file__), "files/HotA/tmp/hota.exe"))
