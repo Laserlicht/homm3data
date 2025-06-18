@@ -60,8 +60,8 @@ class DefFile:
                 unknownB
             ) = struct.unpack('<4I', self.__file.read(16))
 
-            if not header_size == 17 * entries_count + 16:
-                pass
+            assert header_size == 17 * entries_count + 16
+            assert unknownB == 4
 
             self.__offsets = defaultdict(list)
             self.__file_names = defaultdict(list)
