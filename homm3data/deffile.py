@@ -40,89 +40,98 @@ class DefFile:
             unknown2,
             width,
             height,
-            unknown5,
+            group_count,
             unknown6,
-            unknown7,
-            header_size,
-            unknown9,
-            entries_count,
-            unknownB
-        ) = struct.unpack('<12I', self.__file.read(48))
+            unknown7
+        ) = struct.unpack('<8I', self.__file.read(32))
 
         assert unknown1 == 1
         assert unknown2 == 24
-        assert unknown5 == 1
         assert unknown6 == 8
-        assert unknown7 == 1
-        assert header_size == 17 * entries_count + 16
+        #assert unknown7 == ?
 
-        self.__offsets = defaultdict(list)
-        self.__file_names = defaultdict(list)
-        im_datas = defaultdict(list)
+        self.__raw_data = []
 
-        for i in range(entries_count):
-            (name, ) = struct.unpack('<13s', self.__file.read(13))
-            self.__file_names[i].append(name.split(b'\x00', 1)[0].decode('cp1252', errors="ignore"))
-
-        for i in range(entries_count):
-            (offset, ) = struct.unpack("<I", self.__file.read(4))
-            self.__offsets[i].append(offset)
-        
-        for i in range(entries_count):
-            self.__file.seek(self.__offsets[i][0])
-            im_data = {}
-
+        for group in range(group_count):
             (
-                im_data["bits_per_pixel"],
-                im_data["image_size"],
-                im_data["full_width"],
-                im_data["full_height"],
-                im_data["stored_width"],
-                im_data["stored_height"],
-                im_data["margin_left"],
-                im_data["margin_top"],
-                im_data["entry_unknown1"],
-                im_data["entry_unknown2"]
-            ) = struct.unpack('<10I', self.__file.read(40))
+                header_size,
+                group_no,
+                entries_count,
+                unknownB
+            ) = struct.unpack('<4I', self.__file.read(16))
 
-            assert im_data["stored_width"] <= im_data["full_width"]
-            assert im_data["stored_height"] <= im_data["full_height"]
-            assert im_data["entry_unknown1"] == 8
-            assert im_data["entry_unknown2"] in (0, 1)
-            assert im_data["bits_per_pixel"] == 32
-            assert im_data["image_size"] == im_data["stored_width"] * im_data["stored_height"] * 4
+            if not header_size == 17 * entries_count + 16:
+                pass
 
-            im_data["pixeldata"] = self.__file.read(im_data["image_size"])
-            arr = np.frombuffer(im_data["pixeldata"], dtype=np.uint8).reshape((im_data["stored_height"], im_data["stored_width"], 4))
-            arr = arr[:, :, [2, 1, 0, 3]] # Swap channels: BGRA -> RGBA
-            im = Image.fromarray(arr, 'RGBA')
-            im = im.transpose(Image.FLIP_TOP_BOTTOM)
-            im_data["im"] = im
+            self.__offsets = defaultdict(list)
+            self.__file_names = defaultdict(list)
+            im_datas = defaultdict(list)
 
-            im_datas[i].append(im_data)
+            for i in range(entries_count):
+                (name, ) = struct.unpack('<13s', self.__file.read(13))
+                self.__file_names[group_no].append(name.split(b'\x00', 1)[0].decode('cp1252', errors="ignore"))
 
-        self.__raw_data = [
-            {
-                "group_id": group_id,
-                "image_id": 0,
-                "offset": self.__offsets[group_id][0],
-                "name": self.__file_names[group_id][0],
-                "image": {
-                    "size": images[0]["image_size"],
-                    "format": None,
-                    "full_width": images[0]["full_width"],
-                    "full_height": images[0]["full_height"],
-                    "width": images[0]["stored_width"],
-                    "height": images[0]["stored_height"],
-                    "margin_left": images[0]["margin_left"],
-                    "margin_top": images[0]["margin_top"],
-                    "has_shadow": False,
-                    "pixeldata": images[0]["pixeldata"],
-                    "image": images[0]["im"]
+            for i in range(entries_count):
+                (offset, ) = struct.unpack("<I", self.__file.read(4))
+                self.__offsets[group_no].append(offset)
+            
+            filepos = self.__file.tell()
+            for i in range(entries_count):
+                self.__file.seek(self.__offsets[group_no][i])
+                im_data = {}
+
+                (
+                    im_data["bits_per_pixel"],
+                    im_data["image_size"],
+                    im_data["full_width"],
+                    im_data["full_height"],
+                    im_data["stored_width"],
+                    im_data["stored_height"],
+                    im_data["margin_left"],
+                    im_data["margin_top"],
+                    im_data["entry_unknown1"],
+                    im_data["entry_unknown2"]
+                ) = struct.unpack('<10I', self.__file.read(40))
+
+                assert im_data["stored_width"] <= im_data["full_width"]
+                assert im_data["stored_height"] <= im_data["full_height"]
+                assert im_data["entry_unknown1"] == 8
+                assert im_data["entry_unknown2"] in (0, 1)
+                assert im_data["bits_per_pixel"] == 32
+                assert im_data["image_size"] == im_data["stored_width"] * im_data["stored_height"] * 4
+
+                im_data["pixeldata"] = self.__file.read(im_data["image_size"])
+                arr = np.frombuffer(im_data["pixeldata"], dtype=np.uint8).reshape((im_data["stored_height"], im_data["stored_width"], 4))
+                arr = arr[:, :, [2, 1, 0, 3]] # Swap channels: BGRA -> RGBA
+                im = Image.fromarray(arr, 'RGBA')
+                im = im.transpose(Image.FLIP_TOP_BOTTOM)
+                im_data["im"] = im
+
+                im_datas[group_no].append(im_data)
+            self.__file.seek(filepos)
+
+            self.__raw_data += [
+                {
+                    "group_id": group_id,
+                    "image_id": image_id,
+                    "offset": self.__offsets[group_id][image_id],
+                    "name": self.__file_names[group_id][image_id],
+                    "image": {
+                        "size": im_datas[group_id][image_id]["image_size"],
+                        "format": None,
+                        "full_width": im_datas[group_id][image_id]["full_width"],
+                        "full_height": im_datas[group_id][image_id]["full_height"],
+                        "width": im_datas[group_id][image_id]["stored_width"],
+                        "height": im_datas[group_id][image_id]["stored_height"],
+                        "margin_left": im_datas[group_id][image_id]["margin_left"],
+                        "margin_top": im_datas[group_id][image_id]["margin_top"],
+                        "has_shadow": False,
+                        "pixeldata": im_datas[group_id][image_id]["pixeldata"],
+                        "image": im_datas[group_id][image_id]["im"]
+                    }
                 }
-            }
-            for group_id, images in im_datas.items()
-        ]
+                for group_id, image_ids in self.__offsets.items() for image_id, offset in enumerate(image_ids)
+            ]
 
 
     def __parse(self):
