@@ -38,17 +38,17 @@ class DefFile:
             magic,
             unknown1,
             unknown2,
-            width,
-            height,
+            self.__width,
+            self.__height,
             group_count,
             unknown6,
             unknown7
         ) = struct.unpack('<8I', self.__file.read(32))
 
+        assert magic == 0x46323344
         assert unknown1 == 1
         assert unknown2 == 24
         assert unknown6 == 8
-        #assert unknown7 == ?
 
         self.__raw_data = []
 
