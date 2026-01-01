@@ -5,6 +5,7 @@ import struct
 import warnings
 import zlib
 import gzip
+import lzma
 
 @contextlib.contextmanager
 def open(file: str | typing.BinaryIO):
@@ -30,6 +31,39 @@ class LodFile:
         self.__file = file
         self.__parse()
 
+    def __xor_decrypt(self, data, key):
+        key_len = len(key)
+        decrypted_data = bytes(
+            data[i] ^ key[i % key_len]
+            for i in range(len(data))
+        )
+        return decrypted_data
+
+    def __extract_first_lzma_stream(self, data: bytes) -> bytes:
+        """
+        Extracts the first raw LZMA stream found at offset 1
+        using parameters reported by binwalk.
+
+        Returns decompressed bytes.
+        """
+
+        offset = 1  # from binwalk
+
+        filters = [{
+            "id": lzma.FILTER_LZMA1,
+            "dict_size": 262144,  # 256 KiB
+            "lc": 3,
+            "lp": 0,
+            "pb": 2,
+        }]
+
+        decompressor = lzma.LZMADecompressor(
+            format=lzma.FORMAT_RAW,
+            filters=filters
+        )
+
+        return decompressor.decompress(data[offset:])
+
     def __parse(self):
         header = self.__file.read(4)
         if header != b'LOD\0':
@@ -42,14 +76,30 @@ class LodFile:
 
         self.__file.seek(8)
         total, = struct.unpack("<I", self.__file.read(4))
-        self.__file.seek(92)
+
+        self.__file.seek(0x0C)
+        key = self.__file.read(4)
 
         self.__files=[]
-        for i in range(total):
-            filename, = struct.unpack("16s", self.__file.read(16))
-            filename = filename[:filename.index(b'\0')].decode().lower()
-            offset, size, _, csize = struct.unpack("<IIII", self.__file.read(16))
-            self.__files.append((filename, offset, size, csize))
+        self.__is_hota_18 = key[0] == 135
+        if self.__is_hota_18: # HotA 1.8 format
+            self.__file.seek(80)
+            for i in range(total):
+                filename, = struct.unpack("16s", self.__file.read(16))
+                filename = filename.hex() # no filenames in hota 1.8 def, only unique ids
+                encr = self.__file.read(16)
+                decr = self.__xor_decrypt(encr, key)
+                offset, size, csize = struct.unpack("<III", decr[:12])
+                compression_method = encr[12]
+                unknown = encr[13:16]
+                self.__files.append((filename, offset, size, csize, compression_method, unknown))
+        else:
+            self.__file.seek(92)
+            for i in range(total):
+                filename, = struct.unpack("16s", self.__file.read(16))
+                filename = filename[:filename.index(b'\0')].decode().lower()
+                offset, size, unknown, csize = struct.unpack("<IIII", self.__file.read(16))
+                self.__files.append((filename, offset, size, csize, None, unknown))
 
     def get_filelist(self) -> list[str]:
         """
@@ -72,13 +122,21 @@ class LodFile:
         """
         selected_filename = selected_filename.lower()
 
-        for filename, offset, size, csize in self.__files:
+        for filename, offset, size, csize, compression_method, unknown in self.__files:
             if selected_filename != filename:
                 continue
 
             self.__file.seek(offset)
             if csize != 0:
-                data = zlib.decompress(self.__file.read(csize))
+                if self.__is_hota_18 and compression_method == 2:
+                    #HotA 1.8 LOD compression methods
+                    #Flag    Meaning
+                    #0x00    Stored (no compression)
+                    #0x03    zlib / deflate
+                    #0x02    custom wrapper + LZMA-family
+                    data = self.__extract_first_lzma_stream(self.__file.read(csize))
+                else:
+                    data = zlib.decompress(self.__file.read(csize))
             else:
                 data = self.__file.read(size)
             

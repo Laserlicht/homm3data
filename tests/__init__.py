@@ -25,3 +25,15 @@ if not os.path.isfile(os.path.join(os.path.dirname(__file__), "files/HotA/Data/H
     )
     shutil.move(os.path.join(os.path.dirname(__file__), "files/HotA/tmp/app/Data"), os.path.join(os.path.dirname(__file__), "files/HotA"))
     shutil.rmtree(os.path.join(os.path.dirname(__file__), "files/HotA/tmp"))
+
+if not os.path.isfile(os.path.join(os.path.dirname(__file__), "files/HotA18/Data/HotA.lod")):
+    url = "https://web.archive.org/web/20251231221901if_/https://www.vault.acidcave.net/download/HotA_1.8.0_setup.exe"
+    os.makedirs(os.path.join(os.path.dirname(__file__), "files/HotA18"), exist_ok=True)
+    os.makedirs(os.path.join(os.path.dirname(__file__), "files/HotA18/tmp"), exist_ok=True)
+    urllib.request.urlretrieve(url, os.path.join(os.path.dirname(__file__), "files/HotA18/tmp/hota.exe"))
+    subprocess.run(
+        ['innoextract', '--extract', '--output-dir', os.path.join(os.path.dirname(__file__), "files/HotA18/tmp"), os.path.join(os.path.dirname(__file__), "files/HotA18/tmp/hota.exe")],
+        check=True
+    )
+    shutil.move(os.path.join(os.path.dirname(__file__), "files/HotA18/tmp/app/Data"), os.path.join(os.path.dirname(__file__), "files/HotA18"))
+    shutil.rmtree(os.path.join(os.path.dirname(__file__), "files/HotA18/tmp"))
