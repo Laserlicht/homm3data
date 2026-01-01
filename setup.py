@@ -6,7 +6,7 @@ with open("README.md", "r", encoding="utf-8") as f:
 setup(
     name='homm3data',
     packages=find_packages(include=['homm3data']),
-    version='0.1.10',
+    version='0.1.11',
     description='Decoding of Heroes Might of Magic III files',
     long_description=long_description,
     long_description_content_type='text/markdown',
