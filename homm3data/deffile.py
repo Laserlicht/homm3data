@@ -29,9 +29,59 @@ class DefFile:
     """
     Class for DEF handling. Use open() and avoid using directly.
     """
-    def __init__(self, file: typing.BinaryIO):
+    def __init__(self, file: typing.BinaryIO = None):
         self.__file = file
-        self.__parse()
+        if file is not None:
+            self.__parse()
+
+    @classmethod
+    def create(cls, file_type: 'DefFile.FileType' = None,
+               width: int = 1, height: int = 1,
+               palette: list[tuple[int, int, int]] = None) -> 'DefFile':
+        """
+        Create a new empty DEF file in memory.
+
+        Args:
+            file_type (FileType): DEF file type (default: SPRITE)
+            width (int): Default canvas width
+            height (int): Default canvas height
+            palette (list): Optional 256-entry RGB palette
+
+        Returns:
+            DefFile: A new empty DefFile instance
+        """
+        if file_type is None:
+            file_type = cls.FileType.SPRITE
+
+        obj = cls.__new__(cls)
+        obj.__file = None  # no backing file
+        obj._DefFile__file = None
+        obj._DefFile__type = file_type
+        obj._DefFile__width = width
+        obj._DefFile__height = height
+        obj._DefFile__block_count = 0
+        obj._DefFile__raw_data = []
+
+        if palette is None:
+            # Default H3 palette with standard special colors
+            palette = [
+                (0,   255, 255),  # 0: transparency
+                (255, 150, 255),  # 1: shadow border
+                (255, 100, 255),  # 2: shadow border (fog)
+                (255,  50, 255),  # 3: shadow body (fog)
+                (255,   0, 255),  # 4: shadow body
+                (255, 255,   0),  # 5: selection
+                (180,   0, 255),  # 6: shadow under selection
+                (0,   255,   0),  # 7: shadow border under selection
+            ]
+            # Fill rest with grayscale
+            for i in range(8, 256):
+                v = i
+                palette.append((v, v, v))
+        obj._DefFile__palette = list(palette)
+        obj._DefFile__offsets = defaultdict(list)
+        obj._DefFile__file_names = defaultdict(list)
+        return obj
 
     def __parse_d32(self):
         (
@@ -260,6 +310,50 @@ class DefFile:
             "pixeldata": pixeldata
         }
     
+    # VCMI-compatible special palette source colors (indices 0-7)
+    # Used to detect if a palette entry is a "special" color by comparing
+    # with a threshold of 8 per channel (to handle H3's 16-bit 565 RGB)
+    SPECIAL_SOURCE_PALETTE = [
+        (0,   255, 255),  # 0: Transparency (cyan)
+        (255, 150, 255),  # 1: Shadow border (pink)
+        (255, 100, 255),  # 2: Shadow border - fog of war (pink)
+        (255,  50, 255),  # 3: Shadow body - fog of war (magenta)
+        (255,   0, 255),  # 4: Shadow body (magenta)
+        (255, 255,   0),  # 5: Selection / owner flag (yellow)
+        (180,   0, 255),  # 6: Shadow body below selection (violet)
+        (0,   255,   0),  # 7: Shadow border below selection (green)
+    ]
+
+    # Target replacement colors (R, G, B, A)
+    SPECIAL_TARGET_PALETTE = [
+        (0, 0, 0, 0),     # 0: Full transparency
+        (0, 0, 0, 0x40),  # 1: Shadow border
+        (0, 0, 0, 0x40),  # 2: Shadow border (fog of war)
+        (0, 0, 0, 0x80),  # 3: Shadow body (fog of war)
+        (0, 0, 0, 0x80),  # 4: Shadow body
+        (0, 0, 0, 0),     # 5: Selection highlight (transparent)
+        (0, 0, 0, 0x80),  # 6: Shadow body below selection
+        (0, 0, 0, 0x40),  # 7: Shadow border below selection
+    ]
+
+    # Indices 0, 1, 4 are always replaced; 2, 3, 5, 6, 7 only if palette matches
+    ALWAYS_REPLACE = {0, 1, 4}
+
+    @staticmethod
+    def __palette_matches(actual, expected, threshold=8):
+        """Check if actual palette color is close enough to expected special color."""
+        return all(abs(a - e) < threshold for a, e in zip(actual, expected))
+
+    def __detect_special_indices(self):
+        """Detect which palette indices 0-7 are actually special colors."""
+        special = set()
+        for i in range(min(8, len(self.__palette))):
+            if i in self.ALWAYS_REPLACE:
+                special.add(i)
+            elif self.__palette_matches(self.__palette[i], self.SPECIAL_SOURCE_PALETTE[i]):
+                special.add(i)
+        return special
+
     def __get_image(self, data: typing.ByteString, width: int, height: int, full_width: int, full_height: int, margin_left: int, margin_top: int, has_shadow: bool, how: str):
         img_p = Image.frombytes('P', (width, height), data)
         palette = [item for sub_list in self.__palette for item in sub_list] # flatten
@@ -268,62 +362,67 @@ class DefFile:
         pix_rgb = np.array(img_rgb)
         pix_p = np.array(img_p)
 
-        # replace special colors
+        # Detect which special palette indices are active (VCMI-compatible)
+        special = self.__detect_special_indices()
+
+        # Special color replacement per VCMI CDefFile / ScalableImage:
         # 0 -> (0,0,0,0)    = full transparency
         # 1 -> (0,0,0,0x40) = shadow border
-        # 2 -> Normal Pixeldata
-        # 3 -> Normal Pixeldata
+        # 2 -> (0,0,0,0x40) = shadow border (fog of war) - conditional
+        # 3 -> (0,0,0,0x80) = shadow body (fog of war) - conditional
         # 4 -> (0,0,0,0x80) = shadow body
-        # 5 -> (0,0,0,0)    = selection highlight, treat as full transparency
-        # 6 -> (0,0,0,0x80) = shadow body below selection, treat as shadow body
-        # 7 -> (0,0,0,0x40) = shadow border below selection, treat as shadow border
+        # 5 -> (0,0,0,0)    = selection highlight
+        # 6 -> (0,0,0,0x80) = shadow body below selection
+        # 7 -> (0,0,0,0x40) = shadow border below selection
         # >7 -> Normal Pixeldata
 
-        has_overlay = has_shadow and self.__palette[5] == (255, 255, 0) and (pix_p == 5).sum() > 0
+        shadow_indices = {1, 2, 3, 4, 6, 7}  # all shadow-related indices
+        overlay_indices = {5, 6, 7}  # selection/overlay-related indices
+        has_overlay = has_shadow and 5 in special and (pix_p == 5).sum() > 0
         
         match how:
             case "combined":
-                pix_rgb[pix_p == 0] = (0, 0, 0, 0)
+                if 0 in special:
+                    pix_rgb[pix_p == 0] = (0, 0, 0, 0)
                 if has_shadow:
-                    pix_rgb[pix_p == 1] = (0, 0, 0, 0x40)
-                    pix_rgb[pix_p == 4] = (0, 0, 0, 0x80)
-                    if has_overlay:
+                    for idx in shadow_indices & special:
+                        pix_rgb[pix_p == idx] = self.SPECIAL_TARGET_PALETTE[idx]
+                    if has_overlay and 5 in special:
                         pix_rgb[pix_p == 5] = (0, 0, 0, 0)
-                    pix_rgb[pix_p == 6] = (0, 0, 0, 0x80)
-                    pix_rgb[pix_p == 7] = (0, 0, 0, 0x40)
             case "normal":
-                pix_rgb[pix_p == 0] = (0, 0, 0, 0)
+                if 0 in special:
+                    pix_rgb[pix_p == 0] = (0, 0, 0, 0)
                 if has_shadow:
-                    pix_rgb[pix_p == 1] = (0, 0, 0, 0)
-                    pix_rgb[pix_p == 4] = (0, 0, 0, 0)
-                    if has_overlay:
-                        pix_rgb[pix_p == 5] = (0, 0, 0, 0)
-                    pix_rgb[pix_p == 6] = (0, 0, 0, 0)
-                    pix_rgb[pix_p == 7] = (0, 0, 0, 0)
+                    for idx in (shadow_indices | overlay_indices) & special:
+                        pix_rgb[pix_p == idx] = (0, 0, 0, 0)
             case "shadow":
                 if not has_shadow:
                     return None
-                pix_rgb[pix_p == 0] = (0, 0, 0, 0)
-                pix_rgb[pix_p == 1] = (0, 0, 0, 0x40)
-                pix_rgb[pix_p == 2] = (0, 0, 0, 0)
-                pix_rgb[pix_p == 3] = (0, 0, 0, 0)
-                pix_rgb[pix_p == 4] = (0, 0, 0, 0x80)
-                pix_rgb[pix_p == 5] = (0, 0, 0, 0)
-                pix_rgb[pix_p == 6] = (0, 0, 0, 0x80)
-                pix_rgb[pix_p == 7] = (0, 0, 0, 0x40)
+                # Make everything transparent first, then add shadow
+                if 0 in special:
+                    pix_rgb[pix_p == 0] = (0, 0, 0, 0)
+                for idx in range(2, 8):
+                    if idx in special and idx not in shadow_indices:
+                        pix_rgb[pix_p == idx] = (0, 0, 0, 0)
+                    elif idx in special and idx in shadow_indices:
+                        pix_rgb[pix_p == idx] = self.SPECIAL_TARGET_PALETTE[idx]
+                    elif idx not in special:
+                        pass  # normal pixel, make transparent for shadow-only view
+                # non-special pixels become transparent in shadow-only mode
+                for idx in range(2, 256):
+                    if idx not in special:
+                        pix_rgb[pix_p == idx] = (0, 0, 0, 0)
+                if 1 in special:
+                    pix_rgb[pix_p == 1] = self.SPECIAL_TARGET_PALETTE[1]
                 pix_rgb[pix_p > 7] = (0, 0, 0, 0)
             case "overlay":
                 if not has_overlay:
                     return None
-                pix_rgb[pix_p == 0] = (0, 0, 0, 0)
-                pix_rgb[pix_p == 1] = (0, 0, 0, 0)
-                pix_rgb[pix_p == 2] = (0, 0, 0, 0)
-                pix_rgb[pix_p == 3] = (0, 0, 0, 0)
-                pix_rgb[pix_p == 4] = (0, 0, 0, 0)
-                pix_rgb[pix_p == 5] = (255, 255, 255, 255)
-                pix_rgb[pix_p == 6] = (255, 255, 255, 255)
-                pix_rgb[pix_p == 7] = (255, 255, 255, 255)
-                pix_rgb[pix_p > 7] = (0, 0, 0, 0)
+                for idx in range(256):
+                    if idx in overlay_indices and idx in special:
+                        pix_rgb[pix_p == idx] = (255, 255, 255, 255)
+                    else:
+                        pix_rgb[pix_p == idx] = (0, 0, 0, 0)
             case _:
                 warnings.warn("Unknown how %s" % how)
                 return None
@@ -448,23 +547,172 @@ class DefFile:
         else:
             return found_data[0]["name"]
 
+    def set_image(self, group_id: int, image_id: int, image: Image.Image, name: str = None,
+                  margin_left: int = 0, margin_top: int = 0,
+                  full_width: int = None, full_height: int = None):
+        """
+        Set or replace an image frame. The image will be quantized to the current palette.
+
+        Args:
+            group_id (int): The group id
+            image_id (int): The image id within group
+            image (Image.Image): PIL image to set (RGBA or RGB)
+            name (str): Optional filename for the frame
+            margin_left (int): Left margin
+            margin_top (int): Top margin
+            full_width (int): Full canvas width (defaults to image width + margin)
+            full_height (int): Full canvas height (defaults to image height + margin)
+        """
+        if image.mode != 'RGBA':
+            image = image.convert('RGBA')
+
+        if full_width is None:
+            full_width = image.width + margin_left
+        if full_height is None:
+            full_height = image.height + margin_top
+
+        # Quantize RGBA image to palette indices
+        pixeldata = self.__image_to_palette_data(image)
+
+        if name is None:
+            name = "frame_%d_%d" % (group_id, image_id)
+
+        # Update or add the frame
+        existing = [d for d in self.__raw_data
+                    if d["group_id"] == group_id and d["image_id"] == image_id]
+
+        frame_data = {
+            "group_id": group_id,
+            "image_id": image_id,
+            "offset": 0,
+            "name": name,
+            "image": {
+                "size": len(pixeldata),
+                "format": 0,
+                "full_width": full_width,
+                "full_height": full_height,
+                "width": image.width,
+                "height": image.height,
+                "margin_left": margin_left,
+                "margin_top": margin_top,
+                "has_shadow": self.__type not in [self.FileType.SPELL, self.FileType.TERRAIN,
+                                                   self.FileType.CURSOR, self.FileType.INTERFACE],
+                "pixeldata": pixeldata
+            }
+        }
+
+        if existing:
+            idx = self.__raw_data.index(existing[0])
+            self.__raw_data[idx] = frame_data
+        else:
+            self.__raw_data.append(frame_data)
+
+        # Update dimensions if needed
+        self.__width = max(self.__width, full_width)
+        self.__height = max(self.__height, full_height)
+        self.__block_count = len(set(d["group_id"] for d in self.__raw_data))
+
+    def remove_frame(self, group_id: int, image_id: int):
+        """
+        Remove a frame from the DEF.
+
+        Args:
+            group_id (int): The group id
+            image_id (int): The image id within group
+        """
+        self.__raw_data = [d for d in self.__raw_data
+                          if not (d["group_id"] == group_id and d["image_id"] == image_id)]
+        self.__block_count = len(set(d["group_id"] for d in self.__raw_data))
+
+    def __image_to_palette_data(self, image: Image.Image) -> bytes:
+        """Convert RGBA PIL image to palette-indexed bytes."""
+        arr = np.array(image)
+        h, w, _ = arr.shape
+
+        # Build palette array for distance calculation (skip special indices)
+        pal_arr = np.array(self.__palette, dtype=np.float32)  # (256, 3)
+        special = self.__detect_special_indices()
+
+        result = np.zeros((h, w), dtype=np.uint8)
+
+        # Handle transparent pixels -> index 0
+        alpha = arr[:, :, 3]
+        transparent = alpha < 32
+
+        # For non-transparent pixels, find closest palette color
+        rgb = arr[:, :, :3].astype(np.float32)
+
+        # Create mask for usable palette entries (skip special)
+        usable_mask = np.ones(256, dtype=bool)
+        for idx in special:
+            usable_mask[idx] = False
+        usable_indices = np.where(usable_mask)[0]
+
+        if len(usable_indices) > 0:
+            usable_pal = pal_arr[usable_indices]  # (N, 3)
+
+            # Vectorized nearest-neighbor search
+            flat_rgb = rgb.reshape(-1, 3)
+            # Compute distances in chunks to avoid memory issues
+            chunk_size = 4096
+            flat_result = np.zeros(flat_rgb.shape[0], dtype=np.uint8)
+            for start in range(0, flat_rgb.shape[0], chunk_size):
+                end = min(start + chunk_size, flat_rgb.shape[0])
+                chunk = flat_rgb[start:end]
+                dists = np.sum((chunk[:, np.newaxis, :] - usable_pal[np.newaxis, :, :]) ** 2, axis=2)
+                flat_result[start:end] = usable_indices[np.argmin(dists, axis=1)]
+
+            result = flat_result.reshape(h, w)
+
+        result[transparent] = 0  # transparent -> index 0
+        return result.tobytes()
+
+    def set_palette(self, palette: list[tuple[int, int, int]]):
+        """
+        Set the palette (256 RGB tuples).
+
+        Args:
+            palette (list[tuple[int, int, int]]): List of 256 (R, G, B) tuples
+        """
+        assert len(palette) == 256
+        self.__palette = list(palette)
+
+    def set_type(self, file_type: 'DefFile.FileType'):
+        """
+        Set the DEF file type.
+
+        Args:
+            file_type (FileType): The DEF file type
+        """
+        self.__type = file_type
+
     def save(self, file: str | typing.BinaryIO):
         """
-        Write data from file (currently only for testing)
+        Encode and write DEF file (format 0 - uncompressed).
 
         Args:
             file (str | BinaryIO): The file as filepath or file like object
         """
+        close_after = False
         if isinstance(file, str):
             file = builtins.open(file, "wb")
+            close_after = True
 
-        data = self.__recalculate_size_offset()
-        file.write(self.__create_header())
-        
-        data.sort(key=lambda k: k["offset"])
-        for d in data:
-            file.write(struct.pack("<IIIIIIii", d["image"]["size"], d["image"]["format"], d["image"]["full_width"], d["image"]["full_height"], d["image"]["width"], d["image"]["height"], d["image"]["margin_left"], d["image"]["margin_top"]))
-            file.write(d["image"]["pixeldata"])
+        try:
+            data = self.__recalculate_size_offset()
+            file.write(self.__create_header())
+
+            data.sort(key=lambda k: k["offset"])
+            for d in data:
+                file.write(struct.pack("<IIIIIIii",
+                    d["image"]["size"], d["image"]["format"],
+                    d["image"]["full_width"], d["image"]["full_height"],
+                    d["image"]["width"], d["image"]["height"],
+                    d["image"]["margin_left"], d["image"]["margin_top"]))
+                file.write(d["image"]["pixeldata"])
+        finally:
+            if close_after:
+                file.close()
 
 
     def get_size(self) -> tuple[int, int]:
