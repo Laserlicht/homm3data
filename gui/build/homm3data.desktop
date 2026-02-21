@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=H3 Data Editor
+Comment=Editor for Heroes of Might and Magic III data files
+Exec=homm3data
+Icon=homm3data
+Terminal=false
+Type=Application
+Categories=Game;GTK;
+StartupNotify=true
