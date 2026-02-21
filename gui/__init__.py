@@ -1,3 +1,3 @@
 """
-GTK3 GUI for Heroes of Might and Magic III data files.
+GTK4 GUI for Heroes of Might and Magic III data files.
 """

@@ -5,56 +5,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-linux:
-    name: Build Linux AppImage
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libglib2.0-dev libcairo2-dev \
-            libgirepository1.0-dev python3-gi gir1.2-gtk-3.0 \
-            desktop-file-utils file python3-venv python3-pip
-
-      - name: Install Python dependencies
-        run: |
-          python3 -m venv --system-site-packages venv
-          source venv/bin/activate
-          pip install pyinstaller
-          pip install -r requirements.txt
-
-      - name: Build with PyInstaller
-        run: |
-          source venv/bin/activate
-          pyinstaller gui/build/homm3data.spec --noconfirm --distpath dist --workpath build/tmp
-
-      - name: Install linuxdeploy
-        run: |
-          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-          wget -q https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/master/linuxdeploy-plugin-gtk.sh
-          chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-gtk.sh
-          sudo mv linuxdeploy-x86_64.AppImage /usr/local/bin/linuxdeploy
-          sudo mv linuxdeploy-plugin-gtk.sh /usr/local/bin/
-
-      - name: Create AppImage
-        run: |
-          mkdir -p AppDir/usr/bin
-          cp -r dist/homm3data/* AppDir/usr/bin/
-          cp gui/build/homm3data.desktop AppDir/
-          cp gui/homm3data.png AppDir/homm3data.png
-          
-          export DEPLOY_GTK_VERSION=3
-          export OUTPUT=homm3data-x86_64.AppImage
-          linuxdeploy --appdir AppDir --executable AppDir/usr/bin/homm3data --desktop-file AppDir/homm3data.desktop --icon-file AppDir/homm3data.png --plugin gtk --output appimage
-
-      - name: Upload Linux AppImage
-        uses: actions/upload-artifact@v4
-        with:
-          name: homm3data-linux
-          path: homm3data-x86_64.AppImage
-
   build-windows:
     name: Build Windows Executable
     runs-on: windows-latest
@@ -70,7 +20,7 @@ jobs:
           msystem: MINGW64
           update: true
           install: >-
-            mingw-w64-x86_64-gtk3
+            mingw-w64-x86_64-gtk4
             mingw-w64-x86_64-python
             mingw-w64-x86_64-python-pip
             mingw-w64-x86_64-python-gobject
@@ -91,3 +41,4 @@ jobs:
         with:
           name: homm3data-windows
           path: dist/homm3data.exe
+

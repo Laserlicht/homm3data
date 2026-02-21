@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-H3 Data Editor — GTK3 GUI for Heroes of Might and Magic III data files.
+H3 Data Editor — GTK4 GUI for Heroes of Might and Magic III data files.
 
 Modes:
   - Archive Browser: Browse and manage LOD/PAK archives
@@ -8,8 +8,7 @@ Modes:
   - PCX Converter: Convert between H3 PCX/P32 and common image formats
 """
 import gi
-gi.require_version('Gtk', '3.0')
-gi.require_version('Gdk', '3.0')
+gi.require_version('Gtk', '4.0')
 from gi.repository import Gtk, Gdk, Gio
 
 import sys
@@ -24,7 +23,7 @@ from gui.pcx_converter import PcxConverter
 from gui.i18n import _
 
 
-CSS = b"""
+CSS = """
 .primary-toolbar {
     padding: 2px;
 }
@@ -37,15 +36,15 @@ CSS = b"""
 }
 
 .sidebar-button:checked {
-    background: @theme_selected_bg_color;
-    color: @theme_selected_fg_color;
+    background: @accent_bg_color;
+    color: @accent_fg_color;
 }
 
 .mode-header {
     font-size: 11px;
     font-weight: bold;
     padding: 8px 16px 4px 16px;
-    color: alpha(@theme_fg_color, 0.6);
+    opacity: 0.6;
 }
 
 .app-title {
@@ -55,8 +54,7 @@ CSS = b"""
 }
 
 .sidebar {
-    background: shade(@theme_bg_color, 0.96);
-    border-right: 1px solid alpha(@theme_fg_color, 0.1);
+    background: mix(@window_bg_color, @view_bg_color, 0.5);
 }
 """
 
@@ -67,13 +65,12 @@ class MainWindow(Gtk.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app, title="H3 Data Editor")
         self.set_default_size(1200, 750)
-        self.set_position(Gtk.WindowPosition.CENTER)
 
         # Apply CSS
         css_provider = Gtk.CssProvider()
-        css_provider.load_from_data(CSS)
-        Gtk.StyleContext.add_provider_for_screen(
-            Gdk.Screen.get_default(),
+        css_provider.load_from_string(CSS)
+        Gtk.StyleContext.add_provider_for_display(
+            Gdk.Display.get_default(),
             css_provider,
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
         )
@@ -87,69 +84,73 @@ class MainWindow(Gtk.ApplicationWindow):
         # Sidebar
         sidebar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         sidebar.set_size_request(200, -1)
-        sidebar.get_style_context().add_class("sidebar")
+        sidebar.add_css_class("sidebar")
 
         # App title in sidebar
         title_label = Gtk.Label(label=_("H3 Data Editor"))
-        title_label.get_style_context().add_class("app-title")
+        title_label.add_css_class("app-title")
         title_label.set_xalign(0)
-        sidebar.pack_start(title_label, False, False, 0)
+        sidebar.append(title_label)
 
         sep = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
-        sidebar.pack_start(sep, False, False, 0)
+        sidebar.append(sep)
 
         # Mode header
         mode_label = Gtk.Label(label=_("MODES"))
-        mode_label.get_style_context().add_class("mode-header")
+        mode_label.add_css_class("mode-header")
         mode_label.set_xalign(0)
-        sidebar.pack_start(mode_label, False, False, 0)
+        sidebar.append(mode_label)
 
-        # Mode buttons
+        # Mode buttons (ToggleButtons acting as radio group)
         self.mode_buttons = []
 
-        btn_archive = Gtk.RadioButton.new_with_label(None, "📁  " + _("Archive Browser"))
-        btn_archive.set_mode(False)
-        btn_archive.set_alignment(0, 0.5)
-        btn_archive.get_style_context().add_class("sidebar-button")
+        btn_archive = Gtk.ToggleButton(label="📁  " + _("Archive Browser"))
+        btn_archive.set_halign(Gtk.Align.FILL)
+        btn_archive.add_css_class("sidebar-button")
         btn_archive.connect("toggled", self._on_mode_changed, "archive")
-        sidebar.pack_start(btn_archive, False, False, 0)
+        sidebar.append(btn_archive)
         self.mode_buttons.append(btn_archive)
 
-        btn_def = Gtk.RadioButton.new_with_label_from_widget(btn_archive, "🎬  " + _("DEF Editor"))
-        btn_def.set_mode(False)
-        btn_def.set_alignment(0, 0.5)
-        btn_def.get_style_context().add_class("sidebar-button")
+        btn_def = Gtk.ToggleButton(label="🎬  " + _("DEF Editor"))
+        btn_def.set_halign(Gtk.Align.FILL)
+        btn_def.add_css_class("sidebar-button")
+        btn_def.set_group(btn_archive)
         btn_def.connect("toggled", self._on_mode_changed, "def")
-        sidebar.pack_start(btn_def, False, False, 0)
+        sidebar.append(btn_def)
         self.mode_buttons.append(btn_def)
 
-        btn_pcx = Gtk.RadioButton.new_with_label_from_widget(btn_archive, "🖼  " + _("PCX Converter"))
-        btn_pcx.set_mode(False)
-        btn_pcx.set_alignment(0, 0.5)
-        btn_pcx.get_style_context().add_class("sidebar-button")
+        btn_pcx = Gtk.ToggleButton(label="🖼  " + _("PCX Converter"))
+        btn_pcx.set_halign(Gtk.Align.FILL)
+        btn_pcx.add_css_class("sidebar-button")
+        btn_pcx.set_group(btn_archive)
         btn_pcx.connect("toggled", self._on_mode_changed, "pcx")
-        sidebar.pack_start(btn_pcx, False, False, 0)
+        sidebar.append(btn_pcx)
         self.mode_buttons.append(btn_pcx)
 
         # Spacer
-        sidebar.pack_start(Gtk.Box(), True, True, 0)
+        spacer = Gtk.Box()
+        spacer.set_vexpand(True)
+        sidebar.append(spacer)
 
         # Version label
         version_label = Gtk.Label(label=_("homm3data v1.0"))
-        version_label.get_style_context().add_class("dim-label")
+        version_label.add_css_class("dim-label")
         version_label.set_margin_bottom(8)
-        sidebar.pack_start(version_label, False, False, 0)
+        sidebar.append(version_label)
 
-        main_box.pack_start(sidebar, False, False, 0)
+        sidebar.set_hexpand(False)
+        main_box.append(sidebar)
 
         # Separator
         sep = Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
-        main_box.pack_start(sep, False, False, 0)
+        main_box.append(sep)
 
         # Content stack
         self.content_stack = Gtk.Stack()
         self.content_stack.set_transition_type(Gtk.StackTransitionType.SLIDE_UP_DOWN)
         self.content_stack.set_transition_duration(200)
+        self.content_stack.set_hexpand(True)
+        self.content_stack.set_vexpand(True)
 
         # Create mode widgets
         self.archive_browser = ArchiveBrowser(self)
@@ -160,10 +161,9 @@ class MainWindow(Gtk.ApplicationWindow):
         self.content_stack.add_named(self.def_editor, "def")
         self.content_stack.add_named(self.pcx_converter, "pcx")
 
-        main_box.pack_start(self.content_stack, True, True, 0)
+        main_box.append(self.content_stack)
 
-        self.add(main_box)
-        self.show_all()
+        self.set_child(main_box)
 
         # Default mode
         btn_archive.set_active(True)
@@ -193,6 +193,14 @@ class H3DataApp(Gtk.Application):
 
 
 def main():
+    try:
+        import gi
+        gi.require_version('Gtk', '4.0')
+    except (ImportError, ValueError):
+        print("Error: PyGObject (GTK4) not found.")
+        print("Please install it with: pip install '.[gui]'")
+        sys.exit(1)
+
     app = H3DataApp()
     app.run(sys.argv)
 

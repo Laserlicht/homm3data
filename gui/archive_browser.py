@@ -4,8 +4,7 @@ Provides a file browser-like UI with add/remove, sidebar preview,
 and drag & drop support.
 """
 import gi
-gi.require_version('Gtk', '3.0')
-gi.require_version('Gdk', '3.0')
+gi.require_version('Gtk', '4.0')
 from gi.repository import Gtk, Gdk, GdkPixbuf, GLib, Gio
 from PIL import Image
 from io import BytesIO
@@ -33,69 +32,41 @@ class ArchiveBrowser(Gtk.Box):
         self._build_ui()
 
     def _build_ui(self):
-        # Toolbar
-        toolbar = Gtk.Toolbar()
-        toolbar.set_style(Gtk.ToolbarStyle.BOTH_HORIZ)
-        toolbar.get_style_context().add_class("primary-toolbar")
+        # Toolbar (using Gtk.Box with Buttons)
+        toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
+        toolbar.add_css_class("primary-toolbar")
 
-        btn_open = Gtk.ToolButton()
-        btn_open.set_icon_name("document-open")
-        btn_open.set_label(_("Open"))
-        btn_open.set_is_important(True)
-        btn_open.connect("clicked", self._on_open)
-        toolbar.add(btn_open)
+        btn_open = self._make_toolbar_button("document-open", _("Open"), self._on_open)
+        toolbar.append(btn_open)
 
-        btn_save = Gtk.ToolButton()
-        btn_save.set_icon_name("document-save")
-        btn_save.set_label(_("Save"))
-        btn_save.set_is_important(True)
-        btn_save.connect("clicked", self._on_save)
-        toolbar.add(btn_save)
+        btn_save = self._make_toolbar_button("document-save", _("Save"), self._on_save)
+        toolbar.append(btn_save)
 
-        btn_save_as = Gtk.ToolButton()
-        btn_save_as.set_icon_name("document-save-as")
-        btn_save_as.set_label(_("Save As"))
-        btn_save_as.set_is_important(True)
-        btn_save_as.connect("clicked", self._on_save_as)
-        toolbar.add(btn_save_as)
+        btn_save_as = self._make_toolbar_button("document-save-as", _("Save As"), self._on_save_as)
+        toolbar.append(btn_save_as)
 
-        toolbar.add(Gtk.SeparatorToolItem())
+        toolbar.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
 
-        btn_add = Gtk.ToolButton()
-        btn_add.set_icon_name("list-add")
-        btn_add.set_label(_("Add"))
-        btn_add.set_is_important(True)
-        btn_add.connect("clicked", self._on_add_files)
-        toolbar.add(btn_add)
+        btn_add = self._make_toolbar_button("list-add", _("Add"), self._on_add_files)
+        toolbar.append(btn_add)
 
-        btn_remove = Gtk.ToolButton()
-        btn_remove.set_icon_name("list-remove")
-        btn_remove.set_label(_("Remove"))
-        btn_remove.set_is_important(True)
-        btn_remove.connect("clicked", self._on_remove_files)
-        toolbar.add(btn_remove)
+        btn_remove = self._make_toolbar_button("list-remove", _("Remove"), self._on_remove_files)
+        toolbar.append(btn_remove)
 
-        btn_extract = Gtk.ToolButton()
-        btn_extract.set_icon_name("document-save")
-        btn_extract.set_label(_("Export"))
-        btn_extract.set_is_important(True)
-        btn_extract.connect("clicked", self._on_extract_files)
-        toolbar.add(btn_extract)
+        btn_extract = self._make_toolbar_button("document-save", _("Export"), self._on_extract_files)
+        toolbar.append(btn_extract)
 
-        toolbar.add(Gtk.SeparatorToolItem())
+        toolbar.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
 
-        btn_new_lod = Gtk.ToolButton()
-        btn_new_lod.set_icon_name("document-new")
-        btn_new_lod.set_label(_("New LOD"))
-        btn_new_lod.set_is_important(True)
-        btn_new_lod.connect("clicked", self._on_new_lod)
-        toolbar.add(btn_new_lod)
+        btn_new_lod = self._make_toolbar_button("document-new", _("New LOD"), self._on_new_lod)
+        toolbar.append(btn_new_lod)
 
-        self.pack_start(toolbar, False, False, 0)
+        self.append(toolbar)
 
         # Main paned area
         paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
         paned.set_position(400)
+        paned.set_vexpand(True)
 
         # Left: file list
         left_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
@@ -104,11 +75,12 @@ class ArchiveBrowser(Gtk.Box):
         self.search_entry = Gtk.SearchEntry()
         self.search_entry.set_placeholder_text(_("Search..."))
         self.search_entry.connect("search-changed", self._on_search_changed)
-        left_box.pack_start(self.search_entry, False, False, 4)
+        left_box.append(self.search_entry)
 
         # File list
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scrolled.set_vexpand(True)
 
         self.file_store = Gtk.ListStore(str, str, str)  # filename, size, type
         self.file_filter = self.file_store.filter_new()
@@ -123,7 +95,6 @@ class ArchiveBrowser(Gtk.Box):
         self.file_tree.get_selection().set_mode(Gtk.SelectionMode.MULTIPLE)
         self.file_tree.get_selection().connect("changed", self._on_selection_changed)
         self.file_tree.connect("row-activated", self._on_file_double_click)
-        self.file_tree.connect("button-press-event", self._on_file_button_press)
 
         col_name = Gtk.TreeViewColumn(_("Filename"), Gtk.CellRendererText(), text=0)
         col_name.set_sort_column_id(0)
@@ -141,15 +112,24 @@ class ArchiveBrowser(Gtk.Box):
         col_type.set_resizable(True)
         self.file_tree.append_column(col_type)
 
-        scrolled.add(self.file_tree)
-        left_box.pack_start(scrolled, True, True, 0)
+        scrolled.set_child(self.file_tree)
+        left_box.append(scrolled)
+
+        # Context menu via GestureClick
+        gesture = Gtk.GestureClick(button=3)
+        gesture.connect("pressed", self._on_file_right_click)
+        self.file_tree.add_controller(gesture)
 
         # Status bar
         self.status_label = Gtk.Label(label=_("No archive loaded"))
         self.status_label.set_xalign(0)
-        left_box.pack_start(self.status_label, False, False, 4)
+        self.status_label.set_margin_start(4)
+        self.status_label.set_margin_bottom(4)
+        left_box.append(self.status_label)
 
-        paned.pack1(left_box, True, False)
+        paned.set_start_child(left_box)
+        paned.set_resize_start_child(True)
+        paned.set_shrink_start_child(False)
 
         # Right: preview
         right_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
@@ -157,17 +137,25 @@ class ArchiveBrowser(Gtk.Box):
 
         preview_label = Gtk.Label(label=_("Preview"))
         preview_label.set_xalign(0)
-        preview_label.get_style_context().add_class("dim-label")
-        right_box.pack_start(preview_label, False, False, 4)
+        preview_label.add_css_class("dim-label")
+        preview_label.set_margin_start(4)
+        preview_label.set_margin_top(4)
+        right_box.append(preview_label)
 
         preview_scroll = Gtk.ScrolledWindow()
         preview_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        preview_scroll.set_vexpand(True)
 
         self.preview_stack = Gtk.Stack()
         self.preview_stack.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
 
         # Image preview
-        self.preview_image = Gtk.Image()
+        self.preview_image = Gtk.Picture()
+        self.preview_image.set_halign(Gtk.Align.CENTER)
+        self.preview_image.set_valign(Gtk.Align.CENTER)
+        self.preview_image.set_hexpand(False)
+        self.preview_image.set_vexpand(False)
+        self.preview_image.set_can_shrink(False)
         self.preview_stack.add_named(self.preview_image, "image")
 
         # Text preview
@@ -177,44 +165,55 @@ class ArchiveBrowser(Gtk.Box):
         self.preview_text.set_editable(False)
         self.preview_text.set_monospace(True)
         self.preview_text.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
-        text_scroll.add(self.preview_text)
+        text_scroll.set_child(self.preview_text)
         self.preview_stack.add_named(text_scroll, "text")
 
         # Empty preview
         empty_label = Gtk.Label(label=_("Select a file\nfor preview"))
         empty_label.set_justify(Gtk.Justification.CENTER)
-        empty_label.get_style_context().add_class("dim-label")
+        empty_label.add_css_class("dim-label")
         self.preview_stack.add_named(empty_label, "empty")
 
         self.preview_stack.set_visible_child_name("empty")
-        preview_scroll.add(self.preview_stack)
-        right_box.pack_start(preview_scroll, True, True, 0)
+        preview_scroll.set_child(self.preview_stack)
+        right_box.append(preview_scroll)
 
-        paned.pack2(right_box, True, False)
-        self.pack_start(paned, True, True, 0)
+        paned.set_end_child(right_box)
+        paned.set_resize_end_child(True)
+        paned.set_shrink_end_child(False)
+
+        self.append(paned)
 
         # Set up drag & drop
         self._setup_dnd()
 
+    def _make_toolbar_button(self, icon_name, label, callback):
+        """Create a toolbar-style button with icon and label."""
+        btn = Gtk.Button()
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        icon = Gtk.Image.new_from_icon_name(icon_name)
+        box.append(icon)
+        lbl = Gtk.Label(label=label)
+        box.append(lbl)
+        btn.set_child(box)
+        btn.connect("clicked", callback)
+        return btn
+
     def _setup_dnd(self):
         """Set up drag & drop support."""
-        target_entry = Gtk.TargetEntry.new("text/uri-list", 0, 0)
-        self.file_tree.drag_dest_set(
-            Gtk.DestDefaults.ALL,
-            [target_entry],
-            Gdk.DragAction.COPY
-        )
-        self.file_tree.connect("drag-data-received", self._on_drag_data_received)
+        drop_target = Gtk.DropTarget.new(Gio.File, Gdk.DragAction.COPY)
+        drop_target.set_gtypes([Gio.File])
+        drop_target.connect("drop", self._on_drop)
+        self.file_tree.add_controller(drop_target)
 
-    def _on_drag_data_received(self, widget, context, x, y, data, info, time):
+    def _on_drop(self, target, value, x, y):
         """Handle files dropped onto the file list."""
         if self.archive is None:
             self._show_message(_("Please open or create an archive first."))
-            return
+            return False
 
-        uris = data.get_uris()
-        for uri in uris:
-            filepath = Gio.File.new_for_uri(uri).get_path()
+        if isinstance(value, Gio.File):
+            filepath = value.get_path()
             if filepath and os.path.isfile(filepath):
                 filename = os.path.basename(filepath)
                 with open(filepath, "rb") as f:
@@ -222,6 +221,8 @@ class ArchiveBrowser(Gtk.Box):
                 if self.archive_type == 'lod':
                     self.archive.add_file(filename, file_data)
                 self._refresh_file_list()
+            return True
+        return False
 
     def _filter_func(self, model, iter, data=None):
         """Filter function for the search."""
@@ -299,60 +300,77 @@ class ArchiveBrowser(Gtk.Box):
         filename = model.get_value(iter_, 0)
         self._open_file_in_editor(filename)
 
-    def _on_file_button_press(self, widget, event):
+    def _on_file_right_click(self, gesture, n_press, x, y):
         """Handle right-click on a file for context menu."""
-        if event.button == 3:
-            # Get the path at the click position
-            result = self.file_tree.get_path_at_pos(int(event.x), int(event.y))
-            if result is None:
-                return False
-            
-            path, column, cell_x, cell_y = result
-            
-            # Select the row if not already selected
-            selection = self.file_tree.get_selection()
-            if not selection.path_is_selected(path):
-                selection.unselect_all()
-                selection.select_path(path)
-            
-            model, paths = selection.get_selected_rows()
-            if not paths:
-                return False
-            iter_ = model.get_iter(paths[0])
-            if iter_ is None:
-                return False
-            filename = model.get_value(iter_, 0)
-            ext = os.path.splitext(filename)[1].lower()
-            
-            menu = Gtk.Menu()
-            
-            if ext in ('.def', '.d32'):
-                item = Gtk.MenuItem(label=_("Open in DEF Editor"))
-                item.connect("activate", lambda *_: self._open_file_in_editor(filename))
-                menu.append(item)
-            elif ext in ('.pcx', '.p32'):
-                item = Gtk.MenuItem(label=_("Open in PCX Converter"))
-                item.connect("activate", lambda *_: self._open_file_in_editor(filename))
-                menu.append(item)
-            
-            if len(menu.get_children()) > 0:
-                menu.show_all()
-                menu.attach_to_widget(widget, None)
-                menu.popup_at_pointer(event)
-            return True
-        return False
+        result = self.file_tree.get_path_at_pos(int(x), int(y))
+        if result is None:
+            return
+
+        path, column, cell_x, cell_y = result
+
+        # Select the row if not already selected
+        selection = self.file_tree.get_selection()
+        if not selection.path_is_selected(path):
+            selection.unselect_all()
+            selection.select_path(path)
+
+        model, paths = selection.get_selected_rows()
+        if not paths:
+            return
+        iter_ = model.get_iter(paths[0])
+        if iter_ is None:
+            return
+        filename = model.get_value(iter_, 0)
+        ext = os.path.splitext(filename)[1].lower()
+
+        # Build a Gio.Menu for the popover
+        menu_model = Gio.Menu()
+        has_items = False
+
+        if ext in ('.def', '.d32'):
+            menu_model.append(_("Open in DEF Editor"), "ctx.open-def")
+            has_items = True
+        elif ext in ('.pcx', '.p32'):
+            menu_model.append(_("Open in PCX Converter"), "ctx.open-pcx")
+            has_items = True
+
+        if not has_items:
+            return
+
+        # Create action group
+        action_group = Gio.SimpleActionGroup()
+
+        action_def = Gio.SimpleAction.new("open-def", None)
+        action_def.connect("activate", lambda *_: self._open_file_in_editor(filename))
+        action_group.add_action(action_def)
+
+        action_pcx = Gio.SimpleAction.new("open-pcx", None)
+        action_pcx.connect("activate", lambda *_: self._open_file_in_editor(filename))
+        action_group.add_action(action_pcx)
+
+        self.file_tree.insert_action_group("ctx", action_group)
+
+        popover = Gtk.PopoverMenu.new_from_model(menu_model)
+        popover.set_parent(self.file_tree)
+        rect = Gdk.Rectangle()
+        rect.x = int(x)
+        rect.y = int(y)
+        rect.width = 1
+        rect.height = 1
+        popover.set_pointing_to(rect)
+        popover.popup()
 
     def _open_file_in_editor(self, filename):
         """Open the selected file in the appropriate editor."""
         if self.archive is None or self.archive_type != 'lod':
             return
-        
+
         ext = os.path.splitext(filename)[1].lower()
         data = self.archive.get_file(filename)
-        
+
         if data is None:
             return
-        
+
         if ext in ('.def', '.d32'):
             self.parent_window.content_stack.set_visible_child_name("def")
             self.parent_window.def_editor._load_def(data)
@@ -400,8 +418,7 @@ class ArchiveBrowser(Gtk.Box):
                     img = d.read_image(group_id=d.get_groups()[0], image_id=0)
                     if img:
                         pixbuf = pil_to_pixbuf(img)
-                        pixbuf = scale_pixbuf_fit(pixbuf, 400, 400)
-                        self.preview_image.set_from_pixbuf(pixbuf)
+                        self.preview_image.set_paintable(Gdk.Texture.new_for_pixbuf(pixbuf))
                         self.preview_stack.set_visible_child_name("image")
                         return
             except Exception:
@@ -415,8 +432,7 @@ class ArchiveBrowser(Gtk.Box):
                         if img.mode == 'P':
                             img = img.convert('RGBA')
                         pixbuf = pil_to_pixbuf(img)
-                        pixbuf = scale_pixbuf_fit(pixbuf, 400, 400)
-                        self.preview_image.set_from_pixbuf(pixbuf)
+                        self.preview_image.set_paintable(Gdk.Texture.new_for_pixbuf(pixbuf))
                         self.preview_stack.set_visible_child_name("image")
                         return
             except Exception:
@@ -445,8 +461,7 @@ class ArchiveBrowser(Gtk.Box):
                 img = sheets[0]
                 if img:
                     pixbuf = pil_to_pixbuf(img.convert('RGBA') if img.mode != 'RGBA' else img)
-                    pixbuf = scale_pixbuf_fit(pixbuf, 400, 400)
-                    self.preview_image.set_from_pixbuf(pixbuf)
+                    self.preview_image.set_paintable(Gdk.Texture.new_for_pixbuf(pixbuf))
                     self.preview_stack.set_visible_child_name("image")
                     return
         except Exception:
@@ -456,15 +471,8 @@ class ArchiveBrowser(Gtk.Box):
 
     def _on_open(self, button):
         """Open a LOD or PAK file."""
-        dialog = Gtk.FileChooserDialog(
-            title=_("Open Archive"),
-            parent=self.parent_window,
-            action=Gtk.FileChooserAction.OPEN,
-        )
-        dialog.add_buttons(
-            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-            Gtk.STOCK_OPEN, Gtk.ResponseType.OK,
-        )
+        dialog = Gtk.FileDialog()
+        dialog.set_title(_("Open Archive"))
 
         filter_all = Gtk.FileFilter()
         filter_all.set_name(_("H3 Archives (LOD, PAK)"))
@@ -472,27 +480,33 @@ class ArchiveBrowser(Gtk.Box):
         filter_all.add_pattern("*.LOD")
         filter_all.add_pattern("*.pak")
         filter_all.add_pattern("*.PAK")
-        dialog.add_filter(filter_all)
 
         filter_lod = Gtk.FileFilter()
         filter_lod.set_name(_("LOD Files"))
         filter_lod.add_pattern("*.lod")
         filter_lod.add_pattern("*.LOD")
-        dialog.add_filter(filter_lod)
 
         filter_pak = Gtk.FileFilter()
         filter_pak.set_name(_("PAK Files"))
         filter_pak.add_pattern("*.pak")
         filter_pak.add_pattern("*.PAK")
-        dialog.add_filter(filter_pak)
 
-        response = dialog.run()
-        if response == Gtk.ResponseType.OK:
-            filepath = dialog.get_filename()
-            dialog.destroy()
-            self._load_archive(filepath)
-        else:
-            dialog.destroy()
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        filters.append(filter_all)
+        filters.append(filter_lod)
+        filters.append(filter_pak)
+        dialog.set_filters(filters)
+
+        dialog.open(self.parent_window, None, self._on_open_finish)
+
+    def _on_open_finish(self, dialog, result):
+        try:
+            gfile = dialog.open_finish(result)
+            if gfile:
+                filepath = gfile.get_path()
+                self._load_archive(filepath)
+        except GLib.Error:
+            pass
 
     def _load_archive(self, filepath):
         """Load a LOD or PAK archive."""
@@ -524,7 +538,7 @@ class ArchiveBrowser(Gtk.Box):
         if self.archive_path:
             try:
                 self.archive.save(self.archive_path)
-                self._show_message(_("Saved: ") + self.archive_path, Gtk.MessageType.INFO)
+                self._show_message(_("Saved: ") + self.archive_path, is_error=False)
             except Exception as e:
                 self._show_message(_("Error saving: ") + str(e))
         else:
@@ -536,35 +550,29 @@ class ArchiveBrowser(Gtk.Box):
             self._show_message(_("No archive loaded"))
             return
 
-        dialog = Gtk.FileChooserDialog(
-            title=_("Save Archive"),
-            parent=self.parent_window,
-            action=Gtk.FileChooserAction.SAVE,
-        )
-        dialog.add_buttons(
-            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-            Gtk.STOCK_SAVE, Gtk.ResponseType.OK,
-        )
-        dialog.set_do_overwrite_confirmation(True)
+        dialog = Gtk.FileDialog()
+        dialog.set_title(_("Save Archive"))
 
         if self.archive_type == 'lod':
-            dialog.set_current_name("archive.lod")
+            dialog.set_initial_name("archive.lod")
         else:
-            dialog.set_current_name("archive.pak")
+            dialog.set_initial_name("archive.pak")
 
-        response = dialog.run()
-        if response == Gtk.ResponseType.OK:
-            filepath = dialog.get_filename()
-            dialog.destroy()
-            try:
+        dialog.save(self.parent_window, None, self._on_save_as_finish)
+
+    def _on_save_as_finish(self, dialog, result):
+        try:
+            gfile = dialog.save_finish(result)
+            if gfile:
+                filepath = gfile.get_path()
                 self.archive.save(filepath)
                 self.archive_path = filepath
                 self.parent_window.set_title(f"H3 Data Editor — {os.path.basename(filepath)}")
-                self._show_message(_("Saved: ") + filepath, Gtk.MessageType.INFO)
-            except Exception as e:
-                self._show_message(_("Error saving: ") + str(e))
-        else:
-            dialog.destroy()
+                self._show_message(_("Saved: ") + filepath, is_error=False)
+        except GLib.Error:
+            pass
+        except Exception as e:
+            self._show_message(_("Error saving: ") + str(e))
 
     def _on_new_lod(self, button):
         """Create a new empty LOD archive."""
@@ -580,23 +588,19 @@ class ArchiveBrowser(Gtk.Box):
             self._show_message(_("Please open or create an archive first."))
             return
 
-        dialog = Gtk.FileChooserDialog(
-            title=_("Add Files"),
-            parent=self.parent_window,
-            action=Gtk.FileChooserAction.OPEN,
-        )
-        dialog.add_buttons(
-            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-            Gtk.STOCK_ADD, Gtk.ResponseType.OK,
-        )
-        dialog.set_select_multiple(True)
+        dialog = Gtk.FileDialog()
+        dialog.set_title(_("Add Files"))
+        dialog.open_multiple(self.parent_window, None, self._on_add_files_finish)
 
-        response = dialog.run()
-        if response == Gtk.ResponseType.OK:
-            filenames = dialog.get_filenames()
-            dialog.destroy()
+    def _on_add_files_finish(self, dialog, result):
+        try:
+            gfiles = dialog.open_multiple_finish(result)
+            if gfiles is None:
+                return
             added = 0
-            for filepath in filenames:
+            for i in range(gfiles.get_n_items()):
+                gfile = gfiles.get_item(i)
+                filepath = gfile.get_path()
                 try:
                     filename = os.path.basename(filepath)
                     with open(filepath, "rb") as f:
@@ -609,8 +613,8 @@ class ArchiveBrowser(Gtk.Box):
             self._refresh_file_list()
             if added > 0:
                 self.status_label.set_text(f"{added}" + _(" file(s) added"))
-        else:
-            dialog.destroy()
+        except GLib.Error:
+            pass
 
     def _on_remove_files(self, button):
         """Remove selected files from the archive."""
@@ -627,25 +631,27 @@ class ArchiveBrowser(Gtk.Box):
             iter_ = model.get_iter(path)
             filenames.append(model.get_value(iter_, 0))
 
-        # Confirm deletion
-        dialog = Gtk.MessageDialog(
-            transient_for=self.parent_window,
-            flags=0,
-            message_type=Gtk.MessageType.QUESTION,
-            buttons=Gtk.ButtonsType.YES_NO,
-            text=f"{len(filenames)}" + " " + _("Remove files?"),
-        )
-        dialog.format_secondary_text(_("This action cannot be undone."))
-        response = dialog.run()
-        dialog.destroy()
+        # Confirm deletion with AlertDialog
+        alert = Gtk.AlertDialog()
+        alert.set_message(f"{len(filenames)} " + _("Remove files?"))
+        alert.set_detail(_("This action cannot be undone."))
+        alert.set_buttons([_("Cancel"), _("Remove")])
+        alert.set_cancel_button(0)
+        alert.set_default_button(1)
+        alert.choose(self.parent_window, None, self._on_remove_confirm, filenames)
 
-        if response == Gtk.ResponseType.YES:
-            for filename in filenames:
-                if self.archive_type == 'lod':
-                    self.archive.remove_file(filename)
-                elif self.archive_type == 'pak':
-                    self.archive.remove_sheet(filename)
-            self._refresh_file_list()
+    def _on_remove_confirm(self, alert, result, filenames):
+        try:
+            choice = alert.choose_finish(result)
+            if choice == 1:  # "Remove" button
+                for filename in filenames:
+                    if self.archive_type == 'lod':
+                        self.archive.remove_file(filename)
+                    elif self.archive_type == 'pak':
+                        self.archive.remove_sheet(filename)
+                self._refresh_file_list()
+        except GLib.Error:
+            pass
 
     def _on_extract_files(self, button):
         """Extract selected files from the archive."""
@@ -658,20 +664,16 @@ class ArchiveBrowser(Gtk.Box):
             self._show_message(_("No files selected."))
             return
 
-        dialog = Gtk.FileChooserDialog(
-            title=_("Export to..."),
-            parent=self.parent_window,
-            action=Gtk.FileChooserAction.SELECT_FOLDER,
-        )
-        dialog.add_buttons(
-            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-            "Export", Gtk.ResponseType.OK,
-        )
+        dialog = Gtk.FileDialog()
+        dialog.set_title(_("Export to..."))
+        dialog.select_folder(self.parent_window, None, self._on_extract_folder_selected, model, paths)
 
-        response = dialog.run()
-        if response == Gtk.ResponseType.OK:
-            output_dir = dialog.get_filename()
-            dialog.destroy()
+    def _on_extract_folder_selected(self, dialog, result, model, paths):
+        try:
+            gfile = dialog.select_folder_finish(result)
+            if gfile is None:
+                return
+            output_dir = gfile.get_path()
             exported = 0
             for path in paths:
                 iter_ = model.get_iter(path)
@@ -687,17 +689,12 @@ class ArchiveBrowser(Gtk.Box):
                 except Exception as e:
                     self._show_message(_("Error exporting ") + filename + ": " + str(e))
             self.status_label.set_text(f"{exported}" + _(" file(s) exported"))
-        else:
-            dialog.destroy()
+        except GLib.Error:
+            pass
 
-    def _show_message(self, text, msg_type=Gtk.MessageType.ERROR):
+    def _show_message(self, text, is_error=True):
         """Show a message dialog."""
-        dialog = Gtk.MessageDialog(
-            transient_for=self.parent_window,
-            flags=0,
-            message_type=msg_type,
-            buttons=Gtk.ButtonsType.OK,
-            text=text,
-        )
-        dialog.run()
-        dialog.destroy()
+        alert = Gtk.AlertDialog()
+        alert.set_message(text)
+        alert.set_buttons(["OK"])
+        alert.show(self.parent_window)

@@ -2,9 +2,8 @@
 PCX converter mode for converting between H3 PCX format and common image formats.
 """
 import gi
-gi.require_version('Gtk', '3.0')
-gi.require_version('Gdk', '3.0')
-from gi.repository import Gtk, Gdk, GdkPixbuf, Gio
+gi.require_version('Gtk', '4.0')
+from gi.repository import Gtk, Gdk, GdkPixbuf, GLib, Gio
 from PIL import Image
 from io import BytesIO
 import os
@@ -29,56 +28,31 @@ class PcxConverter(Gtk.Box):
         self._build_ui()
 
     def _build_ui(self):
-        # Toolbar
-        toolbar = Gtk.Toolbar()
-        toolbar.set_style(Gtk.ToolbarStyle.BOTH_HORIZ)
-        toolbar.get_style_context().add_class("primary-toolbar")
+        # Toolbar (using Gtk.Box with Buttons)
+        toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
+        toolbar.add_css_class("primary-toolbar")
 
-        btn_open_pcx = Gtk.ToolButton()
-        btn_open_pcx.set_icon_name("document-open")
-        btn_open_pcx.set_label(_("Open PCX/P32"))
-        btn_open_pcx.set_is_important(True)
-        btn_open_pcx.connect("clicked", self._on_open_pcx)
-        toolbar.add(btn_open_pcx)
+        btn_open_pcx = self._make_toolbar_button("document-open", _("Open PCX/P32"), self._on_open_pcx)
+        toolbar.append(btn_open_pcx)
 
-        btn_open_img = Gtk.ToolButton()
-        btn_open_img.set_icon_name("insert-image")
-        btn_open_img.set_label(_("Open Image"))
-        btn_open_img.set_is_important(True)
-        btn_open_img.connect("clicked", self._on_open_image)
-        toolbar.add(btn_open_img)
+        btn_open_img = self._make_toolbar_button("insert-image", _("Open Image"), self._on_open_image)
+        toolbar.append(btn_open_img)
 
-        toolbar.add(Gtk.SeparatorToolItem())
+        toolbar.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
 
-        btn_save_pcx = Gtk.ToolButton()
-        btn_save_pcx.set_icon_name("document-save-as")
-        btn_save_pcx.set_label(_("Save as PCX"))
-        btn_save_pcx.set_is_important(True)
-        btn_save_pcx.connect("clicked", self._on_save_pcx)
-        toolbar.add(btn_save_pcx)
+        btn_save_pcx = self._make_toolbar_button("document-save-as", _("Save as PCX"), self._on_save_pcx)
+        toolbar.append(btn_save_pcx)
 
-        btn_save_p32 = Gtk.ToolButton()
-        btn_save_p32.set_icon_name("document-save-as")
-        btn_save_p32.set_label(_("Save as P32"))
-        btn_save_p32.set_is_important(True)
-        btn_save_p32.connect("clicked", self._on_save_p32)
-        toolbar.add(btn_save_p32)
+        btn_save_p32 = self._make_toolbar_button("document-save-as", _("Save as P32"), self._on_save_p32)
+        toolbar.append(btn_save_p32)
 
-        btn_save_png = Gtk.ToolButton()
-        btn_save_png.set_icon_name("document-save-as")
-        btn_save_png.set_label(_("Save as PNG"))
-        btn_save_png.set_is_important(True)
-        btn_save_png.connect("clicked", self._on_save_png)
-        toolbar.add(btn_save_png)
+        btn_save_png = self._make_toolbar_button("document-save-as", _("Save as PNG"), self._on_save_png)
+        toolbar.append(btn_save_png)
 
-        btn_save_bmp = Gtk.ToolButton()
-        btn_save_bmp.set_icon_name("document-save-as")
-        btn_save_bmp.set_label(_("Save as BMP"))
-        btn_save_bmp.set_is_important(True)
-        btn_save_bmp.connect("clicked", self._on_save_bmp)
-        toolbar.add(btn_save_bmp)
+        btn_save_bmp = self._make_toolbar_button("document-save-as", _("Save as BMP"), self._on_save_bmp)
+        toolbar.append(btn_save_bmp)
 
-        self.pack_start(toolbar, False, False, 0)
+        self.append(toolbar)
 
         # Main area
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
@@ -86,6 +60,7 @@ class PcxConverter(Gtk.Box):
         main_box.set_margin_end(16)
         main_box.set_margin_top(8)
         main_box.set_margin_bottom(8)
+        main_box.set_vexpand(True)
 
         # Info panel
         info_frame = Gtk.Frame(label=_("Image Information"))
@@ -118,8 +93,8 @@ class PcxConverter(Gtk.Box):
         info_grid.attach(Gtk.Label(label=_("Format:")), 0, 3, 1, 1)
         info_grid.attach(self.info_format, 1, 3, 1, 1)
 
-        info_frame.add(info_grid)
-        main_box.pack_start(info_frame, False, False, 0)
+        info_frame.set_child(info_grid)
+        main_box.append(info_frame)
 
         # PCX mode selection for save
         mode_frame = Gtk.Frame(label=_("PCX Save Mode"))
@@ -129,14 +104,16 @@ class PcxConverter(Gtk.Box):
         mode_box.set_margin_top(4)
         mode_box.set_margin_bottom(8)
 
-        self.radio_rgb = Gtk.RadioButton.new_with_label_from_widget(None, _("24-bit RGB"))
-        mode_box.pack_start(self.radio_rgb, False, False, 0)
+        self.radio_rgb = Gtk.ToggleButton(label=_("24-bit RGB"))
+        self.radio_rgb.set_active(True)
+        mode_box.append(self.radio_rgb)
 
-        self.radio_palette = Gtk.RadioButton.new_with_label_from_widget(self.radio_rgb, _("8-bit Palette"))
-        mode_box.pack_start(self.radio_palette, False, False, 0)
+        self.radio_palette = Gtk.ToggleButton(label=_("8-bit Palette"))
+        self.radio_palette.set_group(self.radio_rgb)
+        mode_box.append(self.radio_palette)
 
-        mode_frame.add(mode_box)
-        main_box.pack_start(mode_frame, False, False, 0)
+        mode_frame.set_child(mode_box)
+        main_box.append(mode_frame)
 
         # DnD area / preview
         drop_frame = Gtk.Frame()
@@ -146,43 +123,54 @@ class PcxConverter(Gtk.Box):
         # Drop zone label
         self.drop_label = Gtk.Label(label=_("Drag image here\nor open via toolbar"))
         self.drop_label.set_justify(Gtk.Justification.CENTER)
-        self.drop_label.get_style_context().add_class("dim-label")
+        self.drop_label.add_css_class("dim-label")
         self.drop_label.set_margin_top(16)
 
         preview_scroll = Gtk.ScrolledWindow()
         preview_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        preview_scroll.set_vexpand(True)
 
         self.preview_image = Gtk.Image()
-        preview_scroll.add(self.preview_image)
+        preview_scroll.set_child(self.preview_image)
 
-        preview_box.pack_start(self.drop_label, False, False, 0)
-        preview_box.pack_start(preview_scroll, True, True, 0)
+        preview_box.append(self.drop_label)
+        preview_box.append(preview_scroll)
 
-        drop_frame.add(preview_box)
-        main_box.pack_start(drop_frame, True, True, 0)
+        drop_frame.set_child(preview_box)
+        main_box.append(drop_frame)
 
-        self.pack_start(main_box, True, True, 0)
+        self.append(main_box)
 
         # Drag & drop
-        target_entry = Gtk.TargetEntry.new("text/uri-list", 0, 0)
-        self.drag_dest_set(
-            Gtk.DestDefaults.ALL,
-            [target_entry],
-            Gdk.DragAction.COPY
-        )
-        self.connect("drag-data-received", self._on_drag_data_received)
+        drop_target = Gtk.DropTarget.new(Gio.File, Gdk.DragAction.COPY)
+        drop_target.set_gtypes([Gio.File])
+        drop_target.connect("drop", self._on_drop)
+        self.add_controller(drop_target)
 
-    def _on_drag_data_received(self, widget, context, x, y, data, info, time):
+    def _make_toolbar_button(self, icon_name, label, callback):
+        """Create a toolbar-style button with icon and label."""
+        btn = Gtk.Button()
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        icon = Gtk.Image.new_from_icon_name(icon_name)
+        box.append(icon)
+        lbl = Gtk.Label(label=label)
+        box.append(lbl)
+        btn.set_child(box)
+        btn.connect("clicked", callback)
+        return btn
+
+    def _on_drop(self, target, value, x, y):
         """Handle dropped files."""
-        uris = data.get_uris()
-        if uris:
-            filepath = Gio.File.new_for_uri(uris[0]).get_path()
+        if isinstance(value, Gio.File):
+            filepath = value.get_path()
             if filepath:
                 ext = os.path.splitext(filepath)[1].lower()
                 if ext in ('.pcx', '.p32'):
                     self._load_pcx(filepath)
                 else:
                     self._load_image(filepath)
+            return True
+        return False
 
     def _load_pcx(self, filepath):
         """Load a PCX/P32 file."""
@@ -248,15 +236,8 @@ class PcxConverter(Gtk.Box):
 
     def _on_open_pcx(self, button):
         """Open a PCX/P32 file."""
-        dialog = Gtk.FileChooserDialog(
-            title=_("Open PCX/P32"),
-            parent=self.parent_window,
-            action=Gtk.FileChooserAction.OPEN,
-        )
-        dialog.add_buttons(
-            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-            Gtk.STOCK_OPEN, Gtk.ResponseType.OK,
-        )
+        dialog = Gtk.FileDialog()
+        dialog.set_title(_("Open PCX/P32"))
 
         pcx_filter = Gtk.FileFilter()
         pcx_filter.set_name(_("H3 PCX/P32 Files"))
@@ -264,27 +245,26 @@ class PcxConverter(Gtk.Box):
         pcx_filter.add_pattern("*.PCX")
         pcx_filter.add_pattern("*.p32")
         pcx_filter.add_pattern("*.P32")
-        dialog.add_filter(pcx_filter)
 
-        response = dialog.run()
-        if response == Gtk.ResponseType.OK:
-            filepath = dialog.get_filename()
-            dialog.destroy()
-            self._load_pcx(filepath)
-        else:
-            dialog.destroy()
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        filters.append(pcx_filter)
+        dialog.set_filters(filters)
+
+        dialog.open(self.parent_window, None, self._on_open_pcx_finish)
+
+    def _on_open_pcx_finish(self, dialog, result):
+        try:
+            gfile = dialog.open_finish(result)
+            if gfile:
+                filepath = gfile.get_path()
+                self._load_pcx(filepath)
+        except GLib.Error:
+            pass
 
     def _on_open_image(self, button):
         """Open a common image file."""
-        dialog = Gtk.FileChooserDialog(
-            title=_("Open Image"),
-            parent=self.parent_window,
-            action=Gtk.FileChooserAction.OPEN,
-        )
-        dialog.add_buttons(
-            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-            Gtk.STOCK_OPEN, Gtk.ResponseType.OK,
-        )
+        dialog = Gtk.FileDialog()
+        dialog.set_title(_("Open Image"))
 
         img_filter = Gtk.FileFilter()
         img_filter.set_name(_("Image Files"))
@@ -296,15 +276,21 @@ class PcxConverter(Gtk.Box):
         img_filter.add_pattern("*.jpeg")
         img_filter.add_pattern("*.gif")
         img_filter.add_pattern("*.tiff")
-        dialog.add_filter(img_filter)
 
-        response = dialog.run()
-        if response == Gtk.ResponseType.OK:
-            filepath = dialog.get_filename()
-            dialog.destroy()
-            self._load_image(filepath)
-        else:
-            dialog.destroy()
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        filters.append(img_filter)
+        dialog.set_filters(filters)
+
+        dialog.open(self.parent_window, None, self._on_open_image_finish)
+
+    def _on_open_image_finish(self, dialog, result):
+        try:
+            gfile = dialog.open_finish(result)
+            if gfile:
+                filepath = gfile.get_path()
+                self._load_image(filepath)
+        except GLib.Error:
+            pass
 
     def _on_save_pcx(self, button):
         """Save as H3 PCX format."""
@@ -312,33 +298,27 @@ class PcxConverter(Gtk.Box):
             self._show_message(_("No image loaded"))
             return
 
-        mode = "rgb" if self.radio_rgb.get_active() else "palette"
-        dialog = Gtk.FileChooserDialog(
-            title=_("Save as PCX"),
-            parent=self.parent_window,
-            action=Gtk.FileChooserAction.SAVE,
-        )
-        dialog.add_buttons(
-            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-            Gtk.STOCK_SAVE, Gtk.ResponseType.OK,
-        )
-        dialog.set_do_overwrite_confirmation(True)
-        name = os.path.splitext(os.path.basename(self.current_path))[0] if self.current_path else "image"
-        dialog.set_current_name(f"{name}.pcx")
+        self._save_mode = "rgb" if self.radio_rgb.get_active() else "palette"
 
-        response = dialog.run()
-        if response == Gtk.ResponseType.OK:
-            filepath = dialog.get_filename()
-            dialog.destroy()
-            try:
-                data = pcxfile.write_pcx(self.current_image, mode=mode)
+        dialog = Gtk.FileDialog()
+        dialog.set_title(_("Save as PCX"))
+        name = os.path.splitext(os.path.basename(self.current_path))[0] if self.current_path else "image"
+        dialog.set_initial_name(f"{name}.pcx")
+        dialog.save(self.parent_window, None, self._on_save_pcx_finish)
+
+    def _on_save_pcx_finish(self, dialog, result):
+        try:
+            gfile = dialog.save_finish(result)
+            if gfile:
+                filepath = gfile.get_path()
+                data = pcxfile.write_pcx(self.current_image, mode=self._save_mode)
                 with open(filepath, "wb") as f:
                     f.write(data)
-                self._show_message(_("Saved: ") + filepath, Gtk.MessageType.INFO)
-            except Exception as e:
-                self._show_message(_("Error: ") + str(e))
-        else:
-            dialog.destroy()
+                self._show_message(_("Saved: ") + filepath, is_error=False)
+        except GLib.Error:
+            pass
+        except Exception as e:
+            self._show_message(_("Error: ") + str(e))
 
     def _on_save_p32(self, button):
         """Save as HotA P32 format."""
@@ -346,32 +326,25 @@ class PcxConverter(Gtk.Box):
             self._show_message(_("No image loaded"))
             return
 
-        dialog = Gtk.FileChooserDialog(
-            title=_("Save as P32"),
-            parent=self.parent_window,
-            action=Gtk.FileChooserAction.SAVE,
-        )
-        dialog.add_buttons(
-            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-            Gtk.STOCK_SAVE, Gtk.ResponseType.OK,
-        )
-        dialog.set_do_overwrite_confirmation(True)
+        dialog = Gtk.FileDialog()
+        dialog.set_title(_("Save as P32"))
         name = os.path.splitext(os.path.basename(self.current_path))[0] if self.current_path else "image"
-        dialog.set_current_name(f"{name}.p32")
+        dialog.set_initial_name(f"{name}.p32")
+        dialog.save(self.parent_window, None, self._on_save_p32_finish)
 
-        response = dialog.run()
-        if response == Gtk.ResponseType.OK:
-            filepath = dialog.get_filename()
-            dialog.destroy()
-            try:
+    def _on_save_p32_finish(self, dialog, result):
+        try:
+            gfile = dialog.save_finish(result)
+            if gfile:
+                filepath = gfile.get_path()
                 data = pcxfile.write_p32(self.current_image)
                 with open(filepath, "wb") as f:
                     f.write(data)
-                self._show_message(_("Saved: ") + filepath, Gtk.MessageType.INFO)
-            except Exception as e:
-                self._show_message(_("Error: ") + str(e))
-        else:
-            dialog.destroy()
+                self._show_message(_("Saved: ") + filepath, is_error=False)
+        except GLib.Error:
+            pass
+        except Exception as e:
+            self._show_message(_("Error: ") + str(e))
 
     def _on_save_png(self, button):
         """Save as PNG."""
@@ -387,43 +360,34 @@ class PcxConverter(Gtk.Box):
             self._show_message(_("No image loaded"))
             return
 
-        dialog = Gtk.FileChooserDialog(
-            title=f"Save as {fmt}",
-            parent=self.parent_window,
-            action=Gtk.FileChooserAction.SAVE,
-        )
-        dialog.add_buttons(
-            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-            Gtk.STOCK_SAVE, Gtk.ResponseType.OK,
-        )
-        dialog.set_do_overwrite_confirmation(True)
-        name = os.path.splitext(os.path.basename(self.current_path))[0] if self.current_path else "image"
-        dialog.set_current_name(f"{name}.{ext}")
+        self._save_fmt = fmt
 
-        response = dialog.run()
-        if response == Gtk.ResponseType.OK:
-            filepath = dialog.get_filename()
-            dialog.destroy()
-            try:
+        dialog = Gtk.FileDialog()
+        dialog.set_title(f"Save as {fmt}")
+        name = os.path.splitext(os.path.basename(self.current_path))[0] if self.current_path else "image"
+        dialog.set_initial_name(f"{name}.{ext}")
+        dialog.save(self.parent_window, None, self._on_save_common_finish)
+
+    def _on_save_common_finish(self, dialog, result):
+        try:
+            gfile = dialog.save_finish(result)
+            if gfile:
+                filepath = gfile.get_path()
+                fmt = self._save_fmt
                 img = self.current_image
                 if fmt == "BMP" and img.mode == "RGBA":
                     img = img.convert("RGB")
                 if img.mode == "P" and fmt == "PNG":
                     img = img.convert("RGBA")
                 img.save(filepath, format=fmt)
-                self._show_message(_("Saved: ") + filepath, Gtk.MessageType.INFO)
-            except Exception as e:
-                self._show_message(_("Error: ") + str(e))
-        else:
-            dialog.destroy()
+                self._show_message(_("Saved: ") + filepath, is_error=False)
+        except GLib.Error:
+            pass
+        except Exception as e:
+            self._show_message(_("Error: ") + str(e))
 
-    def _show_message(self, text, msg_type=Gtk.MessageType.ERROR):
-        dialog = Gtk.MessageDialog(
-            transient_for=self.parent_window,
-            flags=0,
-            message_type=msg_type,
-            buttons=Gtk.ButtonsType.OK,
-            text=text,
-        )
-        dialog.run()
-        dialog.destroy()
+    def _show_message(self, text, is_error=True):
+        alert = Gtk.AlertDialog()
+        alert.set_message(text)
+        alert.set_buttons(["OK"])
+        alert.show(self.parent_window)
