@@ -2,8 +2,9 @@
 DEF editor mode for viewing and editing DEF animation frames.
 """
 import gi
-gi.require_version('Gtk', '4.0')
-from gi.repository import Gtk, Gdk, GdkPixbuf, GLib, Gio
+gi.require_version('Gtk', '3.0')
+gi.require_version('Gdk', '3.0')
+from gi.repository import Gtk, Gdk, GdkPixbuf, GLib
 from PIL import Image
 from io import BytesIO
 import os
@@ -33,38 +34,62 @@ class DefEditor(Gtk.Box):
         self._build_ui()
 
     def _build_ui(self):
-        # Toolbar (using Gtk.Box with Buttons)
-        toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
-        toolbar.add_css_class("primary-toolbar")
+        # Toolbar
+        toolbar = Gtk.Toolbar()
+        toolbar.set_style(Gtk.ToolbarStyle.BOTH_HORIZ)
+        toolbar.get_style_context().add_class("primary-toolbar")
 
-        btn_open = self._make_toolbar_button("document-open", _("Open"), self._on_open)
-        toolbar.append(btn_open)
+        btn_open = Gtk.ToolButton()
+        btn_open.set_icon_name("document-open")
+        btn_open.set_label(_("Open"))
+        btn_open.set_is_important(True)
+        btn_open.connect("clicked", self._on_open)
+        toolbar.add(btn_open)
 
-        btn_save = self._make_toolbar_button("document-save", _("Save"), self._on_save)
-        toolbar.append(btn_save)
+        btn_save = Gtk.ToolButton()
+        btn_save.set_icon_name("document-save")
+        btn_save.set_label(_("Save"))
+        btn_save.set_is_important(True)
+        btn_save.connect("clicked", self._on_save)
+        toolbar.add(btn_save)
 
-        toolbar.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
+        toolbar.add(Gtk.SeparatorToolItem())
 
-        btn_import = self._make_toolbar_button("insert-image", _("Import Frame"), self._on_import_frame)
-        toolbar.append(btn_import)
+        btn_import = Gtk.ToolButton()
+        btn_import.set_icon_name("insert-image")
+        btn_import.set_label(_("Import Frame"))
+        btn_import.set_is_important(True)
+        btn_import.connect("clicked", self._on_import_frame)
+        toolbar.add(btn_import)
 
-        btn_export = self._make_toolbar_button("document-save-as", _("Export Frame"), self._on_export_frame)
-        toolbar.append(btn_export)
+        btn_export = Gtk.ToolButton()
+        btn_export.set_icon_name("document-save-as")
+        btn_export.set_label(_("Export Frame"))
+        btn_export.set_is_important(True)
+        btn_export.connect("clicked", self._on_export_frame)
+        toolbar.add(btn_export)
 
-        btn_remove = self._make_toolbar_button("list-remove", _("Remove"), self._on_remove_frame)
-        toolbar.append(btn_remove)
+        btn_remove = Gtk.ToolButton()
+        btn_remove.set_icon_name("list-remove")
+        btn_remove.set_label(_("Remove"))
+        btn_remove.set_is_important(True)
+        btn_remove.connect("clicked", self._on_remove_frame)
+        toolbar.add(btn_remove)
 
-        toolbar.append(Gtk.Separator(orientation=Gtk.Orientation.VERTICAL))
+        toolbar.add(Gtk.SeparatorToolItem())
 
-        btn_new = self._make_toolbar_button("document-new", _("New DEF"), self._on_new_def)
-        toolbar.append(btn_new)
+        btn_new = Gtk.ToolButton()
+        btn_new.set_icon_name("document-new")
+        btn_new.set_label(_("New DEF"))
+        btn_new.set_is_important(True)
+        btn_new.connect("clicked", self._on_new_def)
+        toolbar.add(btn_new)
 
-        self.append(toolbar)
+        self.pack_start(toolbar, False, False, 0)
 
         # Main layout
         main_paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL)
         main_paned.set_position(200)
-        main_paned.set_vexpand(True)
 
         # Left panel: groups + frames list
         left_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
@@ -82,29 +107,28 @@ class DefEditor(Gtk.Box):
         self.info_size.set_xalign(0)
         self.info_groups = Gtk.Label(label=_("Groups:") + " —")
         self.info_groups.set_xalign(0)
-        info_box.append(self.info_type)
-        info_box.append(self.info_size)
-        info_box.append(self.info_groups)
-        info_frame.set_child(info_box)
-        left_box.append(info_frame)
+        info_box.pack_start(self.info_type, False, False, 0)
+        info_box.pack_start(self.info_size, False, False, 0)
+        info_box.pack_start(self.info_groups, False, False, 0)
+        info_frame.add(info_box)
+        left_box.pack_start(info_frame, False, False, 4)
 
         # Group selector
         group_label = Gtk.Label(label=_("Group:"))
         group_label.set_xalign(0)
-        left_box.append(group_label)
+        left_box.pack_start(group_label, False, False, 2)
 
         self.group_combo = Gtk.ComboBoxText()
         self.group_combo.connect("changed", self._on_group_changed)
-        left_box.append(self.group_combo)
+        left_box.pack_start(self.group_combo, False, False, 0)
 
         # Frame list
         frame_label = Gtk.Label(label=_("Frames:"))
         frame_label.set_xalign(0)
-        left_box.append(frame_label)
+        left_box.pack_start(frame_label, False, False, 2)
 
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        scrolled.set_vexpand(True)
 
         self.frame_store = Gtk.ListStore(int, str, str)  # id, name, size
         self.frame_tree = Gtk.TreeView(model=self.frame_store)
@@ -122,12 +146,10 @@ class DefEditor(Gtk.Box):
         col_size = Gtk.TreeViewColumn(_("Size"), Gtk.CellRendererText(), text=2)
         self.frame_tree.append_column(col_size)
 
-        scrolled.set_child(self.frame_tree)
-        left_box.append(scrolled)
+        scrolled.add(self.frame_tree)
+        left_box.pack_start(scrolled, True, True, 0)
 
-        main_paned.set_start_child(left_box)
-        main_paned.set_resize_start_child(False)
-        main_paned.set_shrink_start_child(False)
+        main_paned.pack1(left_box, False, False)
 
         # Right panel: frame preview
         right_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
@@ -138,7 +160,7 @@ class DefEditor(Gtk.Box):
         layer_box.set_margin_top(4)
 
         layer_label = Gtk.Label(label=_("Layer:"))
-        layer_box.append(layer_label)
+        layer_box.pack_start(layer_label, False, False, 0)
 
         self.layer_combo = Gtk.ComboBoxText()
         self.layer_combo.append_text(_("Combined"))
@@ -147,28 +169,28 @@ class DefEditor(Gtk.Box):
         self.layer_combo.append_text(_("Overlay"))
         self.layer_combo.set_active(0)
         self.layer_combo.connect("changed", self._on_layer_changed)
-        layer_box.append(self.layer_combo)
+        layer_box.pack_start(self.layer_combo, False, False, 0)
 
         # Zoom controls
         zoom_label = Gtk.Label(label="  " + _("Zoom:"))
-        layer_box.append(zoom_label)
+        layer_box.pack_start(zoom_label, False, False, 0)
 
         btn_zoom_out = Gtk.Button(label="−")
         btn_zoom_out.connect("clicked", self._on_zoom_out)
-        layer_box.append(btn_zoom_out)
+        layer_box.pack_start(btn_zoom_out, False, False, 0)
 
         self.zoom_label = Gtk.Label(label="100%")
-        layer_box.append(self.zoom_label)
+        layer_box.pack_start(self.zoom_label, False, False, 0)
 
         btn_zoom_in = Gtk.Button(label="+")
         btn_zoom_in.connect("clicked", self._on_zoom_in)
-        layer_box.append(btn_zoom_in)
+        layer_box.pack_start(btn_zoom_in, False, False, 0)
 
         btn_zoom_fit = Gtk.Button(label=_("Fit"))
         btn_zoom_fit.connect("clicked", self._on_zoom_fit)
-        layer_box.append(btn_zoom_fit)
+        layer_box.pack_start(btn_zoom_fit, False, False, 0)
 
-        right_box.append(layer_box)
+        right_box.pack_start(layer_box, False, False, 0)
 
         # Animation controls
         anim_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
@@ -176,59 +198,45 @@ class DefEditor(Gtk.Box):
 
         self.btn_play = Gtk.Button(label="▶ " + _("Play"))
         self.btn_play.connect("clicked", self._on_toggle_animation)
-        anim_box.append(self.btn_play)
+        anim_box.pack_start(self.btn_play, False, False, 0)
 
         fps_label = Gtk.Label(label=_("FPS:"))
-        anim_box.append(fps_label)
+        anim_box.pack_start(fps_label, False, False, 0)
 
         self.fps_spin = Gtk.SpinButton.new_with_range(1, 60, 1)
         self.fps_spin.set_value(10)
         self.fps_spin.connect("value-changed", self._on_fps_changed)
-        anim_box.append(self.fps_spin)
+        anim_box.pack_start(self.fps_spin, False, False, 0)
 
-        right_box.append(anim_box)
+        right_box.pack_start(anim_box, False, False, 0)
 
         # Image preview with scrolling
         preview_scroll = Gtk.ScrolledWindow()
         preview_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        preview_scroll.set_vexpand(True)
 
         # Drawing area for checkerboard + image
         self.drawing_area = Gtk.DrawingArea()
-        self.drawing_area.set_draw_func(self._on_draw)
-        preview_scroll.set_child(self.drawing_area)
+        self.drawing_area.connect("draw", self._on_draw)
+        preview_scroll.add(self.drawing_area)
 
-        right_box.append(preview_scroll)
+        right_box.pack_start(preview_scroll, True, True, 0)
 
         # Frame info
         self.frame_info = Gtk.Label(label="")
         self.frame_info.set_xalign(0)
         self.frame_info.set_margin_start(8)
         self.frame_info.set_margin_bottom(4)
-        right_box.append(self.frame_info)
+        right_box.pack_start(self.frame_info, False, False, 0)
 
-        main_paned.set_end_child(right_box)
-        main_paned.set_resize_end_child(True)
-        main_paned.set_shrink_end_child(False)
-
-        self.append(main_paned)
+        main_paned.pack2(right_box, True, False)
+        self.pack_start(main_paned, True, True, 0)
 
         self._current_pixbuf = None
 
-    def _make_toolbar_button(self, icon_name, label, callback):
-        """Create a toolbar-style button with icon and label."""
-        btn = Gtk.Button()
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-        icon = Gtk.Image.new_from_icon_name(icon_name)
-        box.append(icon)
-        lbl = Gtk.Label(label=label)
-        box.append(lbl)
-        btn.set_child(box)
-        btn.connect("clicked", callback)
-        return btn
-
-    def _on_draw(self, area, cr, width, height):
+    def _on_draw(self, widget, cr):
         """Draw checkerboard background and image."""
+        alloc = widget.get_allocation()
+
         if self._current_pixbuf is None:
             return
 
@@ -236,11 +244,11 @@ class DefEditor(Gtk.Box):
         ph = self._current_pixbuf.get_height()
 
         # Set minimum size for drawing area
-        area.set_size_request(max(pw, width), max(ph, height))
+        widget.set_size_request(max(pw, alloc.width), max(ph, alloc.height))
 
         # Center the image
-        x = max(0, (width - pw) // 2)
-        y = max(0, (height - ph) // 2)
+        x = max(0, (alloc.width - pw) // 2)
+        y = max(0, (alloc.height - ph) // 2)
 
         # Draw checkerboard behind image
         cell = 8
@@ -444,8 +452,15 @@ class DefEditor(Gtk.Box):
 
     def _on_open(self, button):
         """Open a DEF file."""
-        dialog = Gtk.FileDialog()
-        dialog.set_title(_("Open DEF File"))
+        dialog = Gtk.FileChooserDialog(
+            title=_("Open DEF File"),
+            parent=self.parent_window,
+            action=Gtk.FileChooserAction.OPEN,
+        )
+        dialog.add_buttons(
+            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+            Gtk.STOCK_OPEN, Gtk.ResponseType.OK,
+        )
 
         filter_def = Gtk.FileFilter()
         filter_def.set_name(_("DEF Files"))
@@ -453,22 +468,16 @@ class DefEditor(Gtk.Box):
         filter_def.add_pattern("*.DEF")
         filter_def.add_pattern("*.d32")
         filter_def.add_pattern("*.D32")
+        dialog.add_filter(filter_def)
 
-        filters = Gio.ListStore.new(Gtk.FileFilter)
-        filters.append(filter_def)
-        dialog.set_filters(filters)
-
-        dialog.open(self.parent_window, None, self._on_open_finish)
-
-    def _on_open_finish(self, dialog, result):
-        try:
-            gfile = dialog.open_finish(result)
-            if gfile:
-                filepath = gfile.get_path()
-                self._load_def(filepath)
-                self.parent_window.set_title(f"H3 Data Editor — {os.path.basename(filepath)}")
-        except GLib.Error:
-            pass
+        response = dialog.run()
+        if response == Gtk.ResponseType.OK:
+            filepath = dialog.get_filename()
+            dialog.destroy()
+            self._load_def(filepath)
+            self.parent_window.set_title(f"H3 Data Editor — {os.path.basename(filepath)}")
+        else:
+            dialog.destroy()
 
     def _on_save(self, button):
         """Save the DEF file."""
@@ -478,7 +487,7 @@ class DefEditor(Gtk.Box):
         if self.def_path:
             try:
                 self.def_file.save(self.def_path)
-                self._show_message(_("Saved: ") + self.def_path, is_error=False)
+                self._show_message(_("Saved: ") + self.def_path, Gtk.MessageType.INFO)
             except Exception as e:
                 self._show_message(_("Error saving: ") + str(e))
         else:
@@ -486,39 +495,50 @@ class DefEditor(Gtk.Box):
 
     def _on_save_as(self):
         """Save as dialog."""
-        dialog = Gtk.FileDialog()
-        dialog.set_title(_("Save DEF As"))
-        dialog.set_initial_name("sprite.def")
-        dialog.save(self.parent_window, None, self._on_save_as_finish)
+        dialog = Gtk.FileChooserDialog(
+            title=_("Save DEF As"),
+            parent=self.parent_window,
+            action=Gtk.FileChooserAction.SAVE,
+        )
+        dialog.add_buttons(
+            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+            Gtk.STOCK_SAVE, Gtk.ResponseType.OK,
+        )
+        dialog.set_do_overwrite_confirmation(True)
+        dialog.set_current_name("sprite.def")
 
-    def _on_save_as_finish(self, dialog, result):
-        try:
-            gfile = dialog.save_finish(result)
-            if gfile:
-                filepath = gfile.get_path()
+        response = dialog.run()
+        if response == Gtk.ResponseType.OK:
+            filepath = dialog.get_filename()
+            dialog.destroy()
+            try:
                 self.def_file.save(filepath)
                 self.def_path = filepath
-        except GLib.Error:
-            pass
-        except Exception as e:
-            self._show_message(f"Fehler: {str(e)}")
+            except Exception as e:
+                self._show_message(f"Fehler: {str(e)}")
+        else:
+            dialog.destroy()
 
     def _on_new_def(self, button):
-        """Create a new empty DEF — using a custom dialog window."""
-        dialog = Gtk.Window(title=_("Create New DEF"))
-        dialog.set_transient_for(self.parent_window)
-        dialog.set_modal(True)
-        dialog.set_default_size(300, 200)
+        """Create a new empty DEF."""
+        dialog = Gtk.Dialog(
+            title=_("Create New DEF"),
+            parent=self.parent_window,
+            flags=0,
+        )
+        dialog.add_buttons(
+            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+            Gtk.STOCK_OK, Gtk.ResponseType.OK,
+        )
 
-        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        content.set_margin_start(12)
-        content.set_margin_end(12)
-        content.set_margin_top(8)
-        content.set_margin_bottom(8)
-
+        content = dialog.get_content_area()
         grid = Gtk.Grid()
         grid.set_column_spacing(8)
         grid.set_row_spacing(4)
+        grid.set_margin_start(12)
+        grid.set_margin_end(12)
+        grid.set_margin_top(8)
+        grid.set_margin_bottom(8)
 
         grid.attach(Gtk.Label(label=_("Type:")), 0, 0, 1, 1)
         type_combo = Gtk.ComboBoxText()
@@ -537,37 +557,23 @@ class DefEditor(Gtk.Box):
         height_spin.set_value(32)
         grid.attach(height_spin, 1, 2, 1, 1)
 
-        content.append(grid)
+        content.add(grid)
+        dialog.show_all()
 
-        # Buttons
-        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        btn_box.set_halign(Gtk.Align.END)
-
-        btn_cancel = Gtk.Button(label=_("Cancel"))
-        btn_cancel.connect("clicked", lambda *_: dialog.close())
-        btn_box.append(btn_cancel)
-
-        btn_ok = Gtk.Button(label=_("OK"))
-        btn_ok.add_css_class("suggested-action")
-
-        def on_ok(*_):
+        response = dialog.run()
+        if response == Gtk.ResponseType.OK:
             type_idx = type_combo.get_active()
             w = int(width_spin.get_value())
             h = int(height_spin.get_value())
             file_type = list(deffile.DefFile.FileType)[type_idx]
-            dialog.close()
+            dialog.destroy()
 
             self.def_file = deffile.DefFile.create(file_type=file_type, width=w, height=h)
             self.def_path = None
             self.parent_window.set_title("H3 Data Editor — Neues DEF")
             self._refresh_ui()
-
-        btn_ok.connect("clicked", on_ok)
-        btn_box.append(btn_ok)
-
-        content.append(btn_box)
-        dialog.set_child(content)
-        dialog.present()
+        else:
+            dialog.destroy()
 
     def _on_import_frame(self, button):
         """Import an image as a new frame."""
@@ -575,8 +581,16 @@ class DefEditor(Gtk.Box):
             self._show_message(_("Please load or create a DEF first."))
             return
 
-        dialog = Gtk.FileDialog()
-        dialog.set_title(_("Import Frame"))
+        dialog = Gtk.FileChooserDialog(
+            title=_("Import Frame"),
+            parent=self.parent_window,
+            action=Gtk.FileChooserAction.OPEN,
+        )
+        dialog.add_buttons(
+            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+            "Import", Gtk.ResponseType.OK,
+        )
+        dialog.set_select_multiple(True)
 
         img_filter = Gtk.FileFilter()
         img_filter.set_name(_("Image Files"))
@@ -586,25 +600,17 @@ class DefEditor(Gtk.Box):
         img_filter.add_pattern("*.jpeg")
         img_filter.add_pattern("*.gif")
         img_filter.add_pattern("*.tiff")
+        dialog.add_filter(img_filter)
 
-        filters = Gio.ListStore.new(Gtk.FileFilter)
-        filters.append(img_filter)
-        dialog.set_filters(filters)
-
-        dialog.open_multiple(self.parent_window, None, self._on_import_finish)
-
-    def _on_import_finish(self, dialog, result):
-        try:
-            gfiles = dialog.open_multiple_finish(result)
-            if gfiles is None:
-                return
+        response = dialog.run()
+        if response == Gtk.ResponseType.OK:
+            filenames = dialog.get_filenames()
+            dialog.destroy()
 
             group = self.current_group if self.current_group is not None else 0
             start_id = self.def_file.get_frame_count(group) if group in self.def_file.get_groups() else 0
 
-            for i in range(gfiles.get_n_items()):
-                gfile = gfiles.get_item(i)
-                filepath = gfile.get_path()
+            for i, filepath in enumerate(filenames):
                 try:
                     img = Image.open(filepath)
                     name = os.path.splitext(os.path.basename(filepath))[0][:12]
@@ -617,8 +623,8 @@ class DefEditor(Gtk.Box):
             groups = self.def_file.get_groups()
             if group in groups:
                 self.group_combo.set_active(groups.index(group))
-        except GLib.Error:
-            pass
+        else:
+            dialog.destroy()
 
     def _on_export_frame(self, button):
         """Export current frame as PNG."""
@@ -634,26 +640,30 @@ class DefEditor(Gtk.Box):
             self._show_message(_("No image to export"))
             return
 
-        dialog = Gtk.FileDialog()
-        dialog.set_title(_("Export Frame"))
+        dialog = Gtk.FileChooserDialog(
+            title=_("Export Frame"),
+            parent=self.parent_window,
+            action=Gtk.FileChooserAction.SAVE,
+        )
+        dialog.add_buttons(
+            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+            Gtk.STOCK_SAVE, Gtk.ResponseType.OK,
+        )
+        dialog.set_do_overwrite_confirmation(True)
+
         name = self.def_file.get_image_name(self.current_group, self.current_frame) or "frame"
-        dialog.set_initial_name(f"{name}.png")
+        dialog.set_current_name(f"{name}.png")
 
-        # Store image for callback
-        self._export_img = img
-        dialog.save(self.parent_window, None, self._on_export_finish)
-
-    def _on_export_finish(self, dialog, result):
-        try:
-            gfile = dialog.save_finish(result)
-            if gfile and self._export_img:
-                filepath = gfile.get_path()
-                self._export_img.save(filepath)
-                self._export_img = None
-        except GLib.Error:
-            pass
-        except Exception as e:
-            self._show_message(f"Fehler: {str(e)}")
+        response = dialog.run()
+        if response == Gtk.ResponseType.OK:
+            filepath = dialog.get_filename()
+            dialog.destroy()
+            try:
+                img.save(filepath)
+            except Exception as e:
+                self._show_message(f"Fehler: {str(e)}")
+        else:
+            dialog.destroy()
 
     def _on_remove_frame(self, button):
         """Remove the selected frame."""
@@ -666,8 +676,13 @@ class DefEditor(Gtk.Box):
         if self.current_group in groups:
             self.group_combo.set_active(groups.index(self.current_group))
 
-    def _show_message(self, text, is_error=True):
-        alert = Gtk.AlertDialog()
-        alert.set_message(text)
-        alert.set_buttons(["OK"])
-        alert.show(self.parent_window)
+    def _show_message(self, text, msg_type=Gtk.MessageType.ERROR):
+        dialog = Gtk.MessageDialog(
+            transient_for=self.parent_window,
+            flags=0,
+            message_type=msg_type,
+            buttons=Gtk.ButtonsType.OK,
+            text=text,
+        )
+        dialog.run()
+        dialog.destroy()
