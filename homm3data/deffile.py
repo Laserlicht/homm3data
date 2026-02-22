@@ -260,6 +260,50 @@ class DefFile:
             "pixeldata": pixeldata
         }
     
+    # VCMI-compatible special palette source colors (indices 0-7)
+    # Used to detect if a palette entry is a "special" color by comparing
+    # with a threshold of 8 per channel (to handle H3's 16-bit 565 RGB)
+    SPECIAL_SOURCE_PALETTE = [
+        (0,   255, 255),  # 0: Transparency (cyan)
+        (255, 150, 255),  # 1: Shadow border (pink)
+        (255, 100, 255),  # 2: Shadow border - fog of war (pink)
+        (255,  50, 255),  # 3: Shadow body - fog of war (magenta)
+        (255,   0, 255),  # 4: Shadow body (magenta)
+        (255, 255,   0),  # 5: Selection / owner flag (yellow)
+        (180,   0, 255),  # 6: Shadow body below selection (violet)
+        (0,   255,   0),  # 7: Shadow border below selection (green)
+    ]
+
+    # Target replacement colors (R, G, B, A)
+    SPECIAL_TARGET_PALETTE = [
+        (0, 0, 0, 0),     # 0: Full transparency
+        (0, 0, 0, 0x40),  # 1: Shadow border
+        (0, 0, 0, 0x40),  # 2: Shadow border (fog of war)
+        (0, 0, 0, 0x80),  # 3: Shadow body (fog of war)
+        (0, 0, 0, 0x80),  # 4: Shadow body
+        (0, 0, 0, 0),     # 5: Selection highlight (transparent)
+        (0, 0, 0, 0x80),  # 6: Shadow body below selection
+        (0, 0, 0, 0x40),  # 7: Shadow border below selection
+    ]
+
+    # Indices 0, 1, 4 are always replaced; 2, 3, 5, 6, 7 only if palette matches
+    ALWAYS_REPLACE = {0, 1, 4}
+
+    @staticmethod
+    def __palette_matches(actual, expected, threshold=8):
+        """Check if actual palette color is close enough to expected special color."""
+        return all(abs(a - e) < threshold for a, e in zip(actual, expected))
+
+    def __detect_special_indices(self):
+        """Detect which palette indices 0-7 are actually special colors."""
+        special = set()
+        for i in range(min(8, len(self.__palette))):
+            if i in self.ALWAYS_REPLACE:
+                special.add(i)
+            elif self.__palette_matches(self.__palette[i], self.SPECIAL_SOURCE_PALETTE[i]):
+                special.add(i)
+        return special
+
     def __get_image(self, data: typing.ByteString, width: int, height: int, full_width: int, full_height: int, margin_left: int, margin_top: int, has_shadow: bool, how: str):
         img_p = Image.frombytes('P', (width, height), data)
         palette = [item for sub_list in self.__palette for item in sub_list] # flatten
@@ -268,62 +312,67 @@ class DefFile:
         pix_rgb = np.array(img_rgb)
         pix_p = np.array(img_p)
 
-        # replace special colors
+        # Detect which special palette indices are active (VCMI-compatible)
+        special = self.__detect_special_indices()
+
+        # Special color replacement per VCMI CDefFile / ScalableImage:
         # 0 -> (0,0,0,0)    = full transparency
         # 1 -> (0,0,0,0x40) = shadow border
-        # 2 -> Normal Pixeldata
-        # 3 -> Normal Pixeldata
+        # 2 -> (0,0,0,0x40) = shadow border (fog of war) - conditional
+        # 3 -> (0,0,0,0x80) = shadow body (fog of war) - conditional
         # 4 -> (0,0,0,0x80) = shadow body
-        # 5 -> (0,0,0,0)    = selection highlight, treat as full transparency
-        # 6 -> (0,0,0,0x80) = shadow body below selection, treat as shadow body
-        # 7 -> (0,0,0,0x40) = shadow border below selection, treat as shadow border
+        # 5 -> (0,0,0,0)    = selection highlight
+        # 6 -> (0,0,0,0x80) = shadow body below selection
+        # 7 -> (0,0,0,0x40) = shadow border below selection
         # >7 -> Normal Pixeldata
 
-        has_overlay = has_shadow and self.__palette[5] == (255, 255, 0) and (pix_p == 5).sum() > 0
+        shadow_indices = {1, 2, 3, 4, 6, 7}  # all shadow-related indices
+        overlay_indices = {5, 6, 7}  # selection/overlay-related indices
+        has_overlay = has_shadow and 5 in special and (pix_p == 5).sum() > 0
         
         match how:
             case "combined":
-                pix_rgb[pix_p == 0] = (0, 0, 0, 0)
+                if 0 in special:
+                    pix_rgb[pix_p == 0] = (0, 0, 0, 0)
                 if has_shadow:
-                    pix_rgb[pix_p == 1] = (0, 0, 0, 0x40)
-                    pix_rgb[pix_p == 4] = (0, 0, 0, 0x80)
-                    if has_overlay:
+                    for idx in shadow_indices & special:
+                        pix_rgb[pix_p == idx] = self.SPECIAL_TARGET_PALETTE[idx]
+                    if has_overlay and 5 in special:
                         pix_rgb[pix_p == 5] = (0, 0, 0, 0)
-                    pix_rgb[pix_p == 6] = (0, 0, 0, 0x80)
-                    pix_rgb[pix_p == 7] = (0, 0, 0, 0x40)
             case "normal":
-                pix_rgb[pix_p == 0] = (0, 0, 0, 0)
+                if 0 in special:
+                    pix_rgb[pix_p == 0] = (0, 0, 0, 0)
                 if has_shadow:
-                    pix_rgb[pix_p == 1] = (0, 0, 0, 0)
-                    pix_rgb[pix_p == 4] = (0, 0, 0, 0)
-                    if has_overlay:
-                        pix_rgb[pix_p == 5] = (0, 0, 0, 0)
-                    pix_rgb[pix_p == 6] = (0, 0, 0, 0)
-                    pix_rgb[pix_p == 7] = (0, 0, 0, 0)
+                    for idx in (shadow_indices | overlay_indices) & special:
+                        pix_rgb[pix_p == idx] = (0, 0, 0, 0)
             case "shadow":
                 if not has_shadow:
                     return None
-                pix_rgb[pix_p == 0] = (0, 0, 0, 0)
-                pix_rgb[pix_p == 1] = (0, 0, 0, 0x40)
-                pix_rgb[pix_p == 2] = (0, 0, 0, 0)
-                pix_rgb[pix_p == 3] = (0, 0, 0, 0)
-                pix_rgb[pix_p == 4] = (0, 0, 0, 0x80)
-                pix_rgb[pix_p == 5] = (0, 0, 0, 0)
-                pix_rgb[pix_p == 6] = (0, 0, 0, 0x80)
-                pix_rgb[pix_p == 7] = (0, 0, 0, 0x40)
+                # Make everything transparent first, then add shadow
+                if 0 in special:
+                    pix_rgb[pix_p == 0] = (0, 0, 0, 0)
+                for idx in range(2, 8):
+                    if idx in special and idx not in shadow_indices:
+                        pix_rgb[pix_p == idx] = (0, 0, 0, 0)
+                    elif idx in special and idx in shadow_indices:
+                        pix_rgb[pix_p == idx] = self.SPECIAL_TARGET_PALETTE[idx]
+                    elif idx not in special:
+                        pass  # normal pixel, make transparent for shadow-only view
+                # non-special pixels become transparent in shadow-only mode
+                for idx in range(2, 256):
+                    if idx not in special:
+                        pix_rgb[pix_p == idx] = (0, 0, 0, 0)
+                if 1 in special:
+                    pix_rgb[pix_p == 1] = self.SPECIAL_TARGET_PALETTE[1]
                 pix_rgb[pix_p > 7] = (0, 0, 0, 0)
             case "overlay":
                 if not has_overlay:
                     return None
-                pix_rgb[pix_p == 0] = (0, 0, 0, 0)
-                pix_rgb[pix_p == 1] = (0, 0, 0, 0)
-                pix_rgb[pix_p == 2] = (0, 0, 0, 0)
-                pix_rgb[pix_p == 3] = (0, 0, 0, 0)
-                pix_rgb[pix_p == 4] = (0, 0, 0, 0)
-                pix_rgb[pix_p == 5] = (255, 255, 255, 255)
-                pix_rgb[pix_p == 6] = (255, 255, 255, 255)
-                pix_rgb[pix_p == 7] = (255, 255, 255, 255)
-                pix_rgb[pix_p > 7] = (0, 0, 0, 0)
+                for idx in range(256):
+                    if idx in overlay_indices and idx in special:
+                        pix_rgb[pix_p == idx] = (255, 255, 255, 255)
+                    else:
+                        pix_rgb[pix_p == idx] = (0, 0, 0, 0)
             case _:
                 warnings.warn("Unknown how %s" % how)
                 return None
