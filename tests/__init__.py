@@ -39,7 +39,7 @@ if not os.path.isfile(os.path.join(os.path.dirname(__file__), "files/HotA18/Data
     shutil.rmtree(os.path.join(os.path.dirname(__file__), "files/HotA18/tmp"))
 
 if not os.path.isfile(os.path.join(os.path.dirname(__file__), "files/HotA181/Data/HotA.lod")):
-    url = "https://www.vault.acidcave.net/download/HotA_1.8.1_setup.exe"
+    url = "https://web.archive.org/web/20260826210056if_/https://pixeldrain.com/api/file/xdVEvQ4X?download"
     os.makedirs(os.path.join(os.path.dirname(__file__), "files/HotA181"), exist_ok=True)
     os.makedirs(os.path.join(os.path.dirname(__file__), "files/HotA181/tmp"), exist_ok=True)
     urllib.request.urlretrieve(url, os.path.join(os.path.dirname(__file__), "files/HotA181/tmp/hota.exe"))
