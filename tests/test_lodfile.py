@@ -9,3 +9,12 @@ def test_read_def_hota18():
             for group in d.get_groups():
                 for index in range(d.get_frame_count(group)):
                     d.read_image(group_id=group, image_id=index)
+
+def test_read_def_hota181():
+    #read hota181 lod
+    with lodfile.open("tests/files/HotA181/Data/HotA.lod") as lod:
+        files = lod.get_filelist()
+        with deffile.open(BytesIO(lod.get_file(files[0]))) as d:
+            for group in d.get_groups():
+                for index in range(d.get_frame_count(group)):
+                    d.read_image(group_id=group, image_id=index)

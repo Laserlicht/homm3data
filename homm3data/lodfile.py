@@ -81,7 +81,8 @@ class LodFile:
         key = self.__file.read(4)
 
         self.__files=[]
-        self.__is_hota_18 = key[0] == 135
+        # HotA 1.8+ stores a xor key here, original H3 files don't (h3sprite.lod contains leftover junk)
+        self.__is_hota_18 = struct.unpack("<I", key)[0] not in (0, 0x7E0213)
         if self.__is_hota_18: # HotA 1.8 format
             self.__file.seek(80)
             for i in range(total):
