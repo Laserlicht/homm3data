@@ -64,6 +64,35 @@ class LodFile:
 
         return decompressor.decompress(data[offset:])
 
+def __looks_like_hota_18(self, total, key):
+    current = self.__file.tell()
+
+    try:
+        self.__file.seek(80)
+
+        for _ in range(min(total, 8)):
+            file_id = self.__file.read(16)
+            encr = self.__file.read(16)
+
+            if len(file_id) != 16 or len(encr) != 16:
+                return False
+
+            decr = self.__xor_decrypt(encr, key)
+            offset, size, csize = struct.unpack("<III", decr[:12])
+
+            # HotA compression flag is saved in encr[12]
+            method = encr[12]
+
+            if method not in (0, 2, 3):
+                return False
+
+            if offset <= 0 or size < 0 or csize < 0:
+                return False
+
+        return True
+    finally:
+        self.__file.seek(current)
+
     def __parse(self):
         header = self.__file.read(4)
         if header != b'LOD\0':
@@ -81,7 +110,7 @@ class LodFile:
         key = self.__file.read(4)
 
         self.__files=[]
-        self.__is_hota_18 = key[0] == 135
+        self.__is_hota_18 = self.__looks_like_hota_18(total, key)
         if self.__is_hota_18: # HotA 1.8 format
             self.__file.seek(80)
             for i in range(total):
